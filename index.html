@@ -6,17 +6,17 @@
 /* Layout: 計測器のパネル。左に映像(ステージ)、右に受信結果、下に波形スコープ */
 :root {
   --bg: #eef1f4; --surface: #f9fbfc; --ink: #16202b; --muted: #586675; --line: #cdd5dd;
-  --led: #d9680a; --clk: #2a66c9; --ok: #1d8449; --ng: #c0392b; --stage: #0c1015; --stage-ink: #e9eef3;
+  --led: #d9680a; --clk: #2a66c9; --par: #7a4fc0; --ok: #1d8449; --ng: #c0392b; --stage: #0c1015; --stage-ink: #e9eef3;
   --display: "Zen Kaku Gothic New", "Hiragino Sans", "Yu Gothic", sans-serif;
   --body: "IBM Plex Sans JP", "Hiragino Sans", "Yu Gothic", sans-serif;
   --mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
 }
 @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
   --bg: #11161c; --surface: #19212a; --ink: #e5eaf0; --muted: #93a0ae; --line: #2b3540;
-  --led: #ff9a3c; --clk: #6fa2ff; --ok: #4cc27d; --ng: #ff6b5e; color-scheme: dark } }
+  --led: #ff9a3c; --clk: #6fa2ff; --par: #b994ff; --ok: #4cc27d; --ng: #ff6b5e; color-scheme: dark } }
 :root[data-theme="dark"] {
   --bg: #11161c; --surface: #19212a; --ink: #e5eaf0; --muted: #93a0ae; --line: #2b3540;
-  --led: #ff9a3c; --clk: #6fa2ff; --ok: #4cc27d; --ng: #ff6b5e; color-scheme: dark }
+  --led: #ff9a3c; --clk: #6fa2ff; --par: #b994ff; --ok: #4cc27d; --ng: #ff6b5e; color-scheme: dark }
 
 * { box-sizing: border-box; }
 body { background: var(--bg); color: var(--ink); font-family: var(--body); font-size: 15px; line-height: 1.6;
@@ -64,7 +64,7 @@ input[type=range] { accent-color: var(--led); width: 110px; }
 .msg { font-family: var(--mono); font-size: clamp(1.6rem, 5vw, 2.4rem); font-weight: 500; letter-spacing: .04em;
   min-height: 1.4em; word-break: break-all; margin: 2px 0 4px; }
 .msg.wait { color: var(--muted); font-size: 1.1rem; font-family: var(--body); }
-.stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin: 12px 0; }
+.stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(118px, 1fr)); gap: 10px; margin: 12px 0; }
 .stat { border-top: 1px solid var(--line); padding-top: 6px; min-width: 0; }
 .stat b { display: block; font-family: var(--mono); font-weight: 500; font-size: 1.15rem; font-variant-numeric: tabular-nums; }
 .verdict { font-size: .85rem; padding: 6px 10px; border-radius: 6px; border: 1px solid var(--line); margin-top: 4px; }
@@ -78,7 +78,7 @@ input[type=range] { accent-color: var(--led); width: 110px; }
 .log .hex { color: var(--muted); display: block; font-size: .72rem; word-break: break-all; }
 .empty { color: var(--muted); font-size: .85rem; }
 
-.scope canvas { width: 100%; height: 170px; display: block; }
+.scope canvas { width: 100%; height: 190px; display: block; }
 .legend { display: flex; flex-wrap: wrap; gap: 14px; font-size: .82rem; color: var(--muted); margin-bottom: 6px; }
 
 .tips { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 18px; }
@@ -87,6 +87,14 @@ input[type=range] { accent-color: var(--led); width: 110px; }
 .tips p { font-size: .9rem; margin: 0 0 6px; }
 code { font-family: var(--mono); font-size: .85em; }
 @media (prefers-reduced-motion: reduce) { h1 .dot { box-shadow: none; } }
+
+.sw.par { background: var(--par); }
+.modes { display: inline-flex; flex-wrap: wrap; gap: 8px; margin-left: auto; }
+#serPick, #parPick { display: inline-flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+#serPick[hidden], #parPick[hidden] { display: none; }
+label.inline { font-size: .85rem; color: var(--muted); display: inline-flex; gap: 6px; align-items: center; }
+.partial { font-family: var(--mono); font-size: .95rem; color: var(--muted); margin: 0 0 6px; word-break: break-all; }
+@media (max-width: 520px) { .modes { margin-left: 0; } }
 </style>
 
 <div class="wrap">
@@ -101,17 +109,33 @@ code { font-family: var(--mono); font-size: .85em; }
         <button id="srcDemo" aria-pressed="true">デモ信号</button>
         <label class="filebtn">動画を読み込む<input id="fileIn" type="file" accept="video/*"></label>
         <button id="srcCam" aria-pressed="false">カメラ</button>
+        <span class="modes" role="group" aria-label="送信方式">
+          <button id="modePar" aria-pressed="true">並列(LED10個)</button>
+          <button id="modeSer" aria-pressed="false">直列(LED2個)</button>
+        </span>
       </div>
       <div class="stage">
         <canvas id="view" width="640" height="480" aria-label="映像。タップしてLEDの位置を指定"></canvas>
         <span class="badge" id="badge">デモ信号(実機ではありません)</span>
       </div>
       <div class="markers">
-        <button id="pickClk" class="chip" aria-pressed="true"><span class="sw clk"></span>クロックLED(D1)を指定</button>
-        <button id="pickDat" class="chip" aria-pressed="false"><span class="sw dat"></span>データLED(D3)を指定</button>
+        <span id="serPick" hidden>
+          <button id="pickClk" class="chip" aria-pressed="true"><span class="sw clk"></span>クロックLED(D1)を指定</button>
+          <button id="pickDat" class="chip" aria-pressed="false"><span class="sw dat"></span>データLED(D3)を指定</button>
+        </span>
+        <span id="parPick">
+          <button id="placeLine">D1とD10をタップし直す</button>
+          <label class="inline">1個だけ直す
+            <select id="fixSel">
+              <option value="-1">しない</option>
+              <option value="0">D1</option><option value="1">D2</option><option value="2">D3</option><option value="3">D4</option><option value="4">D5</option>
+              <option value="5">D6</option><option value="6">D7</option><option value="7">D8</option><option value="8">D9</option><option value="9">D10</option>
+            </select>
+          </label>
+        </span>
         <button id="autoFind">自動で探す</button>
       </div>
-      <p class="hint" id="hint">映像の上をタップして、選んでいるLEDの位置を指定します。</p>
+      <p class="hint" id="hint">映像の上をタップして、LEDの位置を指定します。</p>
       <div class="row" id="videoCtl" hidden>
         <button id="replay" class="primary">最初から解析</button>
         <label id="speedWrap">再生速度
@@ -120,10 +144,10 @@ code { font-family: var(--mono); font-size: .85em; }
       </div>
       <div class="row" id="demoCtl">
         <label>デモの送信速度
-          <select id="demoBps"><option>5</option><option>10</option><option>15</option><option>20</option></select> bps
+          <select id="demoRate"></select> <span id="demoUnit">回/秒</span>
         </label>
         <label>デモのカメラ
-          <select id="demoFps"><option>30</option><option>60</option></select> fps
+          <select id="demoFps"><option>22</option><option>30</option><option>60</option></select> fps
         </label>
       </div>
       <div class="row">
@@ -137,13 +161,15 @@ code { font-family: var(--mono); font-size: .85em; }
     <section class="panel" aria-label="受信結果">
       <span class="label">最後に正しく受け取ったメッセージ</span>
       <p class="msg wait" id="msg">受信待ち…</p>
+      <p class="partial" id="partial" hidden></p>
       <div class="stats">
         <div class="stat"><span class="label">フレーム 成功/失敗</span><b id="stFrames">0 / 0</b></div>
         <div class="stat"><span class="label">推定速度</span><b id="stBps">–</b></div>
         <div class="stat"><span class="label">映像</span><b id="stFps">–</b></div>
+        <div class="stat" id="stPerrWrap"><span class="label">パリティ誤り</span><b id="stPerr">0</b></div>
       </div>
       <div class="verdict" id="verdict">LEDの位置を指定すると判定を始めます。</div>
-      <h2 style="margin-top:14px">受け取ったビット(新しい順に右へ)</h2>
+      <h2 style="margin-top:14px" id="bitsTitle">受け取ったシンボル(新しい順に右へ)</h2>
       <p class="bits" id="bits">—</p>
       <h2 style="margin-top:14px">フレームの記録</h2>
       <ul class="log" id="log"><li class="empty" style="display:block;border:0">まだありません</li></ul>
@@ -151,29 +177,25 @@ code { font-family: var(--mono); font-size: .85em; }
   </div>
 
   <section class="panel scope" aria-label="波形">
-    <div class="legend">
-      <span><span class="sw clk"></span> クロックLEDの明るさ</span>
-      <span><span class="sw dat"></span> データLEDの明るさ</span>
-      <span>縦線と数字:クロックが切り替わった瞬間に読んだビット(直近6秒)</span>
-    </div>
-    <canvas id="scope" height="170"></canvas>
+    <div class="legend" id="legend"></div>
+    <canvas id="scope" height="190"></canvas>
   </section>
 
   <section class="panel tips">
     <div>
-      <h2>実機での試し方</h2>
+      <h2>実機での試し方(並列)</h2>
       <ol>
-        <li>FPGAに <code>optical_tx</code> を書き込み、D1とD3がオレンジに点滅するのを確認する。</li>
-        <li>スマホのカメラアプリで、ボードから20〜30cmの距離で撮影する。5bpsだと1フレームに16秒かかるので40秒ほど、PB0で10bpsにすれば20秒ほど撮る(60fpsで撮れるならそのほうが確実)。</li>
-        <li>撮影前にLED付近を長押ししてピントと明るさを固定し、明るさを少し下げると白飛びしにくい。</li>
-        <li>「動画を読み込む」で選び、D1とD3をタップするか「自動で探す」を押す。</li>
+        <li>FPGAに <code>optical_par</code> を書き込む。D1がリズムよく、D2〜D10が文字に合わせて点滅する。</li>
+        <li>スマホを縦に持ち、LEDの列が画面の縦いっぱいに映るくらいまで近づける(10〜15cm)。</li>
+        <li>LED付近を長押ししてピントと明るさを固定し、明るさを少し下げると隣のLEDとにじみにくい。</li>
+        <li>自動で見つからなければ、D1、D10の順にタップする。間の8個は等間隔に並べる。</li>
       </ol>
     </div>
     <div>
       <h2>表示の読み方</h2>
-      <p>フレームは <code>7E</code>・文字数・文字・チェックサムの順に並びます。チェックサムが合えば成功です。</p>
-      <p>カメラでリアルタイムに受信するときは、このページを https:// のページ(GitHub Pagesなど)で開きます。スマホは筆箱などに立てかけると安定します。小さな手ブレは「手ブレ補正」が追いかけます。</p>
-      <p>「1ビットあたりのコマ数」が3を下回ると、カメラが点滅を取りこぼしやすくなります。PB0で速度を上げて、どこまで読めるかを確かめてください。</p>
+      <p>並列方式は、クロック1回でD2〜D9の8ビット(1文字)とD10のパリティを一度に読みます。D2〜D10が全部点くのがフレームの始まり(S)です。</p>
+      <p>波形はロジックアナライザのように、10個のLEDの点灯を横に並べています。下の文字はクロックの切り替わりで読んだ内容で、赤はパリティ誤りです。</p>
+      <p>カメラでリアルタイムに受信するときは、このページを https:// のページ(GitHub Pagesなど)で開きます。「1シンボルあたりのコマ数」が3を下回ると取りこぼしやすくなります。</p>
     </div>
   </section>
 </div>
@@ -182,7 +204,8 @@ code { font-family: var(--mono); font-size: .85em; }
 
 <script>
 // ==CORE START==
-// ---- 送信側のモデル(VHDLの optical_tx と同じ動き) ----
+// ================= 送信側のモデル(VHDLと同じ動き) =================
+// ---- 直列(optical_tx):D1=クロック、D3=データ1ビット ----
 function makeFrameBytes(msg) {
   const f = [0x7E, msg.length];
   let sum = msg.length;
@@ -201,25 +224,50 @@ function txState(t, bps, bits) {
   const n = Math.floor(t / T);
   const d = bits[((n % bits.length) + bits.length) % bits.length];
   const toggles = Math.floor((t - T / 2) / T) + 1;
-  const c = ((toggles % 2) + 2) % 2;
-  return { c, d };
+  return { c: ((toggles % 2) + 2) % 2, d };
 }
+// ---- 並列(optical_par):D1=クロック、D2〜D9=1バイト、D10=パリティ ----
+const SYNC_SYM = 0x1FF;   // D2〜D10 全点灯
+function parity8(b) { let p = 0; for (let i = 0; i < 8; i++) p ^= (b >> i) & 1; return p; }
+function makeFrameSymbols(msg) {
+  const body = [msg.length];
+  let sum = msg.length;
+  for (const ch of msg) { const b = ch.charCodeAt(0) & 0xFF; body.push(b); sum ^= b; }
+  body.push(sum);
+  return [SYNC_SYM, ...body.map((b) => (b << 1) | parity8(b))];
+}
+function txParState(t, rate, syms) {
+  const T = 1 / rate, n = Math.floor(t / T);
+  const s = syms[((n % syms.length) + syms.length) % syms.length];
+  const toggles = Math.floor((t - T / 2) / T) + 1;
+  return { c: ((toggles % 2) + 2) % 2, s };
+}
+// k番目のLED(0=D1 … 9=D10)が点いているか
+function ledOn(st, k) { return k === 0 ? st.c : (st.s >> (9 - k)) & 1; }
 
-// ---- 明るさ → 0/1 の判定(明暗の幅に自動で追従し、ヒステリシス付き) ----
+// ================= 明るさ → 0/1 の判定 =================
+// 明暗の幅に自動で追従し、ヒステリシス(行ったり来たり防止の幅)付きで判定する
 function makeChannel() { return { lo: null, hi: null, state: 0, valid: false }; }
 function updateChannel(ch, v) {
   if (ch.lo === null) { ch.lo = v; ch.hi = v; }
   const r0 = ch.hi - ch.lo;
-  ch.hi = Math.max(v, ch.hi - 0.004 * r0);
-  ch.lo = Math.min(v, ch.lo + 0.004 * r0);
+  ch.hi = Math.max(v, ch.hi - 0.002 * r0);
+  ch.lo = Math.min(v, ch.lo + 0.002 * r0);
   const range = ch.hi - ch.lo;
   ch.valid = range > 12;
   const mid = (ch.hi + ch.lo) / 2, h = range * 0.12;
   if (v > mid + h) ch.state = 1; else if (v < mid - h) ch.state = 0;
   return ch.state;
 }
+function medianRate(ts) {
+  if (ts.length < 6) return null;
+  const d = []; for (let i = 1; i < ts.length; i++) d.push(ts[i] - ts[i - 1]);
+  d.sort((a, b) => a - b);
+  const m = d[Math.floor(d.length / 2)];
+  return m > 0 ? 1 / m : null;
+}
 
-// ---- 復号:クロックが切り替わった瞬間のデータを1ビットとして読む ----
+// ================= 直列の復号:クロックが切り替わった瞬間のデータを1ビットとして読む =================
 function makeDecoder(onFrame) {
   return { clk: makeChannel(), dat: makeChannel(), prevC: null, sh: 0, mode: "hunt", bitsIn: 0, len: 0, buf: [],
     bitTimes: [], totalBits: 0, ok: 0, ng: 0, recent: "", onFrame };
@@ -258,19 +306,61 @@ function pushBit(dec, b, t) {
     if (dec.onFrame) dec.onFrame({ ok, t, bytes, text: String.fromCharCode(...dec.buf) });
   }
 }
-function estimateBps(dec) {
-  const ts = dec.bitTimes; if (ts.length < 6) return null;
-  const d = []; for (let i = 1; i < ts.length; i++) d.push(ts[i] - ts[i - 1]);
-  d.sort((a, b) => a - b);
-  const m = d[Math.floor(d.length / 2)];
-  return m > 0 ? 1 / m : null;
+function estimateBps(dec) { return medianRate(dec.bitTimes); }
+
+// ================= 並列の復号:クロックが切り替わった瞬間のD2〜D10を9ビットとして読む =================
+function makeParDecoder(onFrame) {
+  return { ch: Array.from({ length: 10 }, makeChannel), prevC: null, mode: "hunt", len: 0, buf: [], perr: 0,
+    symTimes: [], totalSyms: 0, parityErr: 0, ok: 0, ng: 0, partial: "", recent: [], onFrame };
 }
-// ---- 手ブレ補正:クロックLEDが点いている間、その光の重心を追いかけて2つの印を一緒に動かす ----
+function feedPar(dec, t, vals) {
+  // データLEDは、自分の明暗の幅がクロックLEDの幅の4割に届くまで「消灯」とみなす
+  // (D2のように同期のときしか点かないLEDが、隣の光漏れやノイズで誤判定しないように)
+  const st = vals.map((v, i) => updateChannel(dec.ch[i], v));
+  const cr = dec.ch[0].hi - dec.ch[0].lo;
+  for (let i = 1; i < 10; i++) if (dec.ch[i].hi - dec.ch[i].lo <= Math.max(12, 0.4 * cr)) st[i] = 0;
+  let sym = null;
+  if (dec.ch[0].valid && dec.prevC !== null && st[0] !== dec.prevC) {
+    sym = 0; for (let k = 1; k < 10; k++) sym = (sym << 1) | st[k];
+    pushSym(dec, sym, t);
+  }
+  if (dec.ch[0].valid) dec.prevC = st[0];
+  return { states: st, sym };
+}
+function pushSym(dec, s, t) {
+  dec.totalSyms++;
+  dec.symTimes.push(t); if (dec.symTimes.length > 41) dec.symTimes.shift();
+  dec.recent.push(s); if (dec.recent.length > 24) dec.recent.shift();
+  if (s === SYNC_SYM) { dec.mode = "len"; dec.buf = []; dec.perr = 0; dec.partial = ""; return; }
+  const b = s >> 1;
+  if (parity8(b) !== (s & 1)) { dec.parityErr++; dec.perr++; }
+  if (dec.mode === "hunt") return;
+  if (dec.mode === "len") {
+    if (b < 1 || b > 64) { dec.mode = "hunt"; return; }
+    dec.len = b; dec.mode = "data"; return;
+  }
+  if (dec.mode === "data") {
+    dec.buf.push(b); dec.partial += String.fromCharCode(b);
+    if (dec.buf.length === dec.len) dec.mode = "sum";
+    return;
+  }
+  if (dec.mode === "sum") {
+    let x = dec.len; for (const v of dec.buf) x ^= v;
+    const ok = x === b && dec.perr === 0;
+    if (ok) dec.ok++; else dec.ng++;
+    dec.mode = "hunt";
+    if (dec.onFrame) dec.onFrame({ ok, t, perr: dec.perr, bytes: [dec.len, ...dec.buf, b], text: String.fromCharCode(...dec.buf) });
+  }
+}
+
+// ================= 手ブレ補正 =================
+// クロックLED(pts[0])が点いている間、その光の重心を追いかけて、全部の印を一緒に動かす
 // img は {width, height, data(RGBA)}、印の座標は 0〜1、r は読み取り半径(img の画素)
 // tr は追跡用の記憶 { peak }(印を置き直したら新しく作る)
-function trackStep(img, clk, dat, tr, r) {
-  const W = img.width, H = img.height, d = img.data, cx = clk.x * W, cy = clk.y * H;
-  const sep = Math.hypot((clk.x - dat.x) * W, (clk.y - dat.y) * H);
+function trackStep(img, pts, tr, r) {
+  const W = img.width, H = img.height, d = img.data, c0 = pts[0], cx = c0.x * W, cy = c0.y * H;
+  let sep = Infinity;
+  for (let i = 1; i < pts.length; i++) sep = Math.min(sep, Math.hypot((c0.x - pts[i].x) * W, (c0.y - pts[i].y) * H));
   const R = Math.max(4, Math.min(r * 3, sep * 0.45));
   let max = 0, sum = 0, n = 0;
   const lum = (i) => 0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2];
@@ -289,8 +379,65 @@ function trackStep(img, clk, dat, tr, r) {
   }
   if (sw <= 0) return null;
   const dx = (sx / sw - cx) * 0.5 / W, dy = (sy / sw - cy) * 0.5 / H;
-  return { clk: { x: clk.x + dx, y: clk.y + dy }, dat: { x: dat.x + dx, y: dat.y + dy } };
+  return pts.map((p) => ({ x: p.x + dx, y: p.y + dy }));
 }
+
+// ================= LEDの場所を自動で探す =================
+// list: 縮小した明るさ画像(幅sw×高さsh)の並び。点滅の大きい所を探す
+function varianceMap(list, P) {
+  const N = list.length, v = new Float32Array(P);
+  for (let p = 0; p < P; p++) {
+    let s = 0, s2 = 0; for (const f of list) { s += f[p]; s2 += f[p] * f[p]; }
+    v[p] = s2 / N - (s / N) ** 2;
+  }
+  return v;
+}
+function topPeaks(v, sw, sh, maxN, sup, minVar) {
+  const peaks = [], a = v.slice();
+  for (let k = 0; k < maxN; k++) {
+    let best = -1, bi = 0;
+    for (let p = 0; p < a.length; p++) if (a[p] > best) { best = a[p]; bi = p; }
+    if (best < minVar) break;
+    peaks.push({ x: bi % sw, y: Math.floor(bi / sw), p: bi });
+    const bx = bi % sw, by = Math.floor(bi / sw);
+    for (let y = by - sup; y <= by + sup; y++) for (let x = bx - sup; x <= bx + sup; x++)
+      if (x >= 0 && y >= 0 && x < sw && y < sh) a[y * sw + x] = -1;
+  }
+  return peaks;
+}
+function flipCount(list, p) {
+  const ch = makeChannel(); let prev = null, n = 0;
+  for (const f of list) { const s = updateChannel(ch, f[p]); if (prev !== null && s !== prev) n++; prev = s; }
+  return n;
+}
+// 直列:点滅の大きい2か所。切り替わりが多いほうをクロックにする
+function findSerial(list, sw, sh) {
+  if (list.length < 30) return null;
+  const pk = topPeaks(varianceMap(list, sw * sh), sw, sh, 2, Math.round(sw / 13), 50);
+  if (pk.length < 2) return null;
+  const f = pk.map((q) => flipCount(list, q.p)), ci = f[0] >= f[1] ? 0 : 1;
+  const n = (q) => ({ x: (q.x + 0.5) / sw, y: (q.y + 0.5) / sh });
+  return [n(pk[ci]), n(pk[1 - ci])];
+}
+// 並列:点滅している点を集めて1本の直線に並べ、両端をD1とD10にする(切り替わりが多い端がD1)
+function findParallel(list, sw, sh) {
+  if (list.length < 30) return null;
+  const pk = topPeaks(varianceMap(list, sw * sh), sw, sh, 14, 2, 50);
+  if (pk.length < 3) return null;
+  let mx = 0, my = 0; for (const q of pk) { mx += q.x; my += q.y; } mx /= pk.length; my /= pk.length;
+  let sxx = 0, syy = 0, sxy = 0;
+  for (const q of pk) { sxx += (q.x - mx) ** 2; syy += (q.y - my) ** 2; sxy += (q.x - mx) * (q.y - my); }
+  const ang = 0.5 * Math.atan2(2 * sxy, sxx - syy), ux = Math.cos(ang), uy = Math.sin(ang);
+  const on = pk.filter((q) => Math.abs(-(q.x - mx) * uy + (q.y - my) * ux) <= 3);
+  if (on.length < 3) return null;
+  on.sort((a, b) => ((a.x - mx) * ux + (a.y - my) * uy) - ((b.x - mx) * ux + (b.y - my) * uy));
+  let e1 = on[0], e2 = on[on.length - 1];
+  if (Math.hypot(e1.x - e2.x, e1.y - e2.y) < 6) return null;
+  if (flipCount(list, e2.p) > flipCount(list, e1.p)) [e1, e2] = [e2, e1];
+  const a = { x: (e1.x + 0.5) / sw, y: (e1.y + 0.5) / sh }, b = { x: (e2.x + 0.5) / sw, y: (e2.y + 0.5) / sh };
+  return lineOf(a, b);
+}
+function lineOf(a, b) { return Array.from({ length: 10 }, (_, k) => ({ x: a.x + (b.x - a.x) * k / 9, y: a.y + (b.y - a.y) * k / 9 })); }
 // ==CORE END==
 
 // ==DEMUX START==
@@ -421,27 +568,34 @@ const dctx = demoCv.getContext("2d");
 const still = document.createElement("canvas"), sctx = still.getContext("2d");
 const vid = $("vid");
 
-const DEMO_MSG = "HI FPGA";
-const DEMO_BITS = makeFrameBits(DEMO_MSG);
-const DEMO_LEDS = []; // 5個×2列。D1〜D5 が左列、D6〜D10 が右列
-for (let col = 0; col < 2; col++) for (let row = 0; row < 5; row++) DEMO_LEDS.push({ x: 0.40 + col * 0.22, y: 0.18 + row * 0.16 });
+const DEMO_SER_MSG = "HI FPGA";
+const DEMO_PAR_MSG = "HELLO! THIS TEXT CAME FROM THE FPGA BY LIGHT.";
+const DEMO_BITS = makeFrameBits(DEMO_SER_MSG);
+const DEMO_SYMS = makeFrameSymbols(DEMO_PAR_MSG);
+const DEMO_COL = Array.from({ length: 10 }, (_, k) => ({ x: 0.5, y: 0.1 + k * 0.09 }));   // 拡張ボードと同じ縦1列
+const RATES = { par: [2, 5, 8, 10], ser: [5, 10, 15, 20] };
 
+let mode = "par";                // "par"=並列(10個) / "ser"=直列(2個)
 let source = "demo";
-let markers = { clk: { ...DEMO_LEDS[0] }, dat: { ...DEMO_LEDS[2] } };
-let picking = "clk";
-let dec, scopeBuf = [], frames = [], lastMsg = null;
+let pts = [];                    // LEDの位置(0〜1)。並列:[D1…D10]、直列:[クロック, データ]
+let placeStep = 0;               // 並列:0=次のタップはD1、1=次はD10
+let picking = 0;                 // 直列:0=クロック、1=データ
+let dec, scopeBuf = [], frames = [], lastMsg = null, lastStates = [];
 let fpsTimes = [], demoTimer = null, rvfcId = null, stream = null, lastMediaTime = -1;
-let curRot = 0;                  // 動画の回転(縦撮りなど)
-let camFindTimer = null, trk = { peak: 0 };
+let curRot = 0, camFindTimer = null, trk = { peak: 0 };
 let fileJob = null, fileInfo = null, fileObj = null, analyzing = false;
-const SMALL_W = 80, SMALL_H = 60, RING = 90;
+const SMALL_W = 160, SMALL_H = 120, RING = 90, SCAN_MAX = 900;
 let ring = [], smallAll = [];
 
 function resetDecoder() {
   trk = { peak: 0 };
-  dec = makeDecoder((f) => { frames.unshift(f); frames = frames.slice(0, 8); if (f.ok) lastMsg = f.text; renderLog(); });
-  scopeBuf = []; frames = []; lastMsg = null; renderLog(); renderMsg();
+  const onFrame = (f) => { frames.unshift(f); frames = frames.slice(0, 8); if (f.ok) lastMsg = f.text; renderLog(); };
+  dec = mode === "par" ? makeParDecoder(onFrame) : makeDecoder(onFrame);
+  scopeBuf = []; frames = []; lastMsg = null; lastStates = []; renderLog(); renderMsg();
 }
+function ready() { return mode === "par" ? pts.length === 10 && pts.every(Boolean) : !!(pts[0] && pts[1]); }
+function demoPositions() { return mode === "par" ? DEMO_COL.map((p) => ({ ...p })) : [{ ...DEMO_COL[0] }, { ...DEMO_COL[2] }]; }
+function findLeds(list) { return mode === "par" ? findParallel(list, SMALL_W, SMALL_H) : findSerial(list, SMALL_W, SMALL_H); }
 
 // ---------- 映像の大きさと描画(回転を考慮) ----------
 function srcSize(src) {
@@ -462,20 +616,32 @@ function grab(src) {
   drawSrc(pctx, src, 320, ph);
   return pctx.getImageData(0, 0, 320, ph);
 }
+// 読み取る半径(画素)。隣のLEDと重ならないよう、印どうしの距離の45%までに抑える
+function effRadius(W, H) {
+  let r = +$("radius").value * W / 640, m = Infinity;
+  for (let i = 0; i < pts.length; i++) for (let j = i + 1; j < pts.length; j++)
+    if (pts[i] && pts[j]) m = Math.min(m, Math.hypot((pts[i].x - pts[j].x) * W, (pts[i].y - pts[j].y) * H));
+  return Math.max(1.5, Math.min(r, m * 0.45));
+}
 
 // ---------- 1コマぶんの処理 ----------
 function processFrame(src, t) {
   const img = grab(src);
   if (!img) return;
-  if (markers.clk && markers.dat) {
-    const r = +$("radius").value * 320 / 640;
-    const cv = sampleAt(img, markers.clk, r), dv = sampleAt(img, markers.dat, r);
-    const res = feed(dec, t, cv, dv);
-    scopeBuf.push({ t, cv, dv, bit: res.bit });
+  if (ready()) {
+    const r = effRadius(img.width, img.height);
+    const vals = pts.map((p) => sampleAt(img, p, r));
+    if (mode === "par") {
+      const res = feedPar(dec, t, vals);
+      lastStates = res.states; scopeBuf.push({ t, st: res.states, sym: res.sym });
+    } else {
+      const res = feed(dec, t, vals[0], vals[1]);
+      lastStates = [res.c, res.d]; scopeBuf.push({ t, cv: vals[0], dv: vals[1], bit: res.bit });
+    }
     while (scopeBuf.length && scopeBuf[0].t < t - 6) scopeBuf.shift();
     if (source === "camera" && $("track").checked) {
-      const moved = trackStep(img, markers.clk, markers.dat, trk, r);
-      if (moved) markers = moved;
+      const moved = trackStep(img, pts, trk, r);
+      if (moved) pts = moved;
     }
   }
   ring.push(computeSmall(img)); if (ring.length > RING) ring.shift();
@@ -495,10 +661,14 @@ function sampleAt(img, m, r) {
 function computeSmall(img) {
   const W = img.width, H = img.height, d = img.data, out = new Uint8ClampedArray(SMALL_W * SMALL_H);
   for (let y = 0; y < SMALL_H; y++) for (let x = 0; x < SMALL_W; x++) {
-    const sx = Math.floor(x * W / SMALL_W), sy = Math.floor(y * H / SMALL_H), i = (sy * W + sx) * 4;
+    const sx = Math.floor((x + 0.5) * W / SMALL_W), sy = Math.floor((y + 0.5) * H / SMALL_H), i = (sy * W + sx) * 4;
     out[y * SMALL_W + x] = 0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2];
   }
   return out;
+}
+function markerStyle(i) {
+  if (mode === "ser") return { col: css(i === 0 ? "--clk" : "--led"), label: i === 0 ? "C" : "D" };
+  return { col: css(i === 0 ? "--clk" : i === 9 ? "--par" : "--led"), label: String(i + 1) };
 }
 function drawView(src) {
   const [sw, sh] = srcSize(src);
@@ -507,84 +677,67 @@ function drawView(src) {
   if (view.height !== H) view.height = H;
   view.parentElement.style.aspectRatio = W + " / " + H;
   drawSrc(vctx, src, W, H);
-  const r = +$("radius").value;
-  for (const [k, col, name] of [["clk", css("--clk"), "C"], ["dat", css("--led"), "D"]]) {
-    const m = markers[k]; if (!m) continue;
-    vctx.lineWidth = 2.5; vctx.strokeStyle = col;
-    vctx.beginPath(); vctx.arc(m.x * W, m.y * H, r, 0, Math.PI * 2); vctx.stroke();
-    vctx.font = "600 15px IBM Plex Mono, monospace"; vctx.fillStyle = col;
-    vctx.fillText(name, m.x * W + r + 4, m.y * H - r);
-  }
+  const r = effRadius(W, H);
+  vctx.font = "600 13px IBM Plex Mono, monospace";
+  pts.forEach((m, i) => {
+    if (!m) return;
+    const { col, label } = markerStyle(i), x = m.x * W, y = m.y * H;
+    vctx.lineWidth = 2; vctx.strokeStyle = col;
+    vctx.beginPath(); vctx.arc(x, y, r, 0, Math.PI * 2); vctx.stroke();
+    if (lastStates[i] === 1) { vctx.globalAlpha = 0.35; vctx.fillStyle = col; vctx.fill(); vctx.globalAlpha = 1; }
+    vctx.fillStyle = col; vctx.fillText(label, x + r + 4, y + 4);
+  });
 }
 function css(v) { return getComputedStyle(document.documentElement).getPropertyValue(v).trim(); }
 
-// ---------- 点滅しているLEDを2か所探す(切り替わりが多いほうをクロックとみなす) ----------
-function findLeds(list) {
-  if (list.length < 30) return null;
-  const N = list.length, P = SMALL_W * SMALL_H, varr = new Float32Array(P);
-  for (let p = 0; p < P; p++) {
-    let s = 0, s2 = 0; for (const f of list) { s += f[p]; s2 += f[p] * f[p]; }
-    varr[p] = s2 / N - (s / N) ** 2;
-  }
-  const peaks = [];
-  for (let k = 0; k < 2; k++) {
-    let best = -1, bi = 0;
-    for (let p = 0; p < P; p++) if (varr[p] > best) { best = varr[p]; bi = p; }
-    if (best < 50) break;
-    peaks.push(bi);
-    const bx = bi % SMALL_W, by = Math.floor(bi / SMALL_W);
-    for (let y = by - 6; y <= by + 6; y++) for (let x = bx - 6; x <= bx + 6; x++)
-      if (x >= 0 && y >= 0 && x < SMALL_W && y < SMALL_H) varr[y * SMALL_W + x] = -1;
-  }
-  if (peaks.length < 2) return null;
-  const flips = peaks.map((p) => { const ch = makeChannel(); let prev = null, n = 0;
-    for (const f of list) { const s = updateChannel(ch, f[p]); if (prev !== null && s !== prev) n++; prev = s; } return n; });
-  const pos = peaks.map((p) => ({ x: (p % SMALL_W + 0.5) / SMALL_W, y: (Math.floor(p / SMALL_W) + 0.5) / SMALL_H }));
-  const ci = flips[0] >= flips[1] ? 0 : 1;
-  return { clk: pos[ci], dat: pos[1 - ci] };
-}
-
-// ---------- デモ信号:実機ボードを真似た映像を作る ----------
+// ---------- デモ信号:拡張ボードを真似た映像を作る ----------
 function drawDemo(t) {
-  const W = 640, H = 480, bps = +$("demoBps").value, fps = +$("demoFps").value;
+  const W = 640, H = 480, rate = +$("demoRate").value, fps = +$("demoFps").value;
   dctx.fillStyle = "#16301f"; dctx.fillRect(0, 0, W, H);
-  dctx.fillStyle = "#1d3b28"; dctx.fillRect(170, 30, 300, 420);
+  dctx.fillStyle = "#1d3b28"; dctx.fillRect(250, 20, 140, 440);
   dctx.fillStyle = "#c9b98a"; dctx.font = "13px monospace";
-  DEMO_LEDS.forEach((p, i) => dctx.fillText("D" + (i + 1), p.x * W - 52, p.y * H + 5));
   // 露光時間ぶんの平均をとる(カメラは一瞬ではなく少しの時間ためて撮る)
-  const exp = 0.6 / fps, sub = 6;
-  let onC = 0, onD = 0;
-  for (let k = 0; k < sub; k++) { const s = txState(t - exp * k / sub, bps, DEMO_BITS); onC += s.c; onD += s.d; }
-  const lit = [onC / sub, 0, onD / sub, 0, 0, 0, 0, 0, 0, 0];
-  DEMO_LEDS.forEach((p, i) => {
+  const exp = 0.6 / fps, sub = 6, lit = new Array(10).fill(0);
+  for (let k = 0; k < sub; k++) {
+    const tt = t - exp * k / sub;
+    if (mode === "par") { const s = txParState(tt, rate, DEMO_SYMS); for (let i = 0; i < 10; i++) lit[i] += ledOn(s, i) / sub; }
+    else { const s = txState(tt, rate, DEMO_BITS); lit[0] += s.c / sub; lit[2] += s.d / sub; }
+  }
+  DEMO_COL.forEach((p, i) => {
     const x = p.x * W, y = p.y * H, a = lit[i] * (0.85 + Math.random() * 0.15);
-    dctx.fillStyle = "#d8d2c4"; dctx.fillRect(x - 15, y - 10, 30, 20);
+    dctx.fillStyle = "#c9b98a"; dctx.fillText("D" + (i + 1), x - 52, y + 5);
+    dctx.fillStyle = "#d8d2c4"; dctx.fillRect(x - 10, y - 7, 20, 14);
     if (a > 0.02) {
-      const g = dctx.createRadialGradient(x, y, 2, x, y, 34);
-      g.addColorStop(0, `rgba(255,236,190,${a})`); g.addColorStop(0.35, `rgba(255,150,40,${a * 0.85})`); g.addColorStop(1, "rgba(255,120,20,0)");
-      dctx.fillStyle = g; dctx.fillRect(x - 36, y - 36, 72, 72);
+      const g = dctx.createRadialGradient(x, y, 2, x, y, 20);
+      g.addColorStop(0, `rgba(255,236,190,${a})`); g.addColorStop(0.4, `rgba(255,150,40,${a * 0.85})`); g.addColorStop(1, "rgba(255,120,20,0)");
+      dctx.fillStyle = g; dctx.fillRect(x - 22, y - 22, 44, 44);
     }
   });
   dctx.fillStyle = "rgba(255,255,255,0.05)";
   for (let k = 0; k < 120; k++) dctx.fillRect(Math.random() * W, Math.random() * H, 2, 2);
 }
+function fillDemoRates() {
+  const sel = $("demoRate"); sel.textContent = "";
+  for (const r of RATES[mode]) { const o = document.createElement("option"); o.textContent = r; sel.append(o); }
+  sel.value = "5"; $("demoUnit").textContent = mode === "par" ? "回/秒" : "bps";
+}
 function startDemo() {
   stopAll(); source = "demo"; curRot = 0; setSourceUI();
-  markers = { clk: { ...DEMO_LEDS[0] }, dat: { ...DEMO_LEDS[2] } };
+  pts = demoPositions(); placeStep = 0;
   resetDecoder();
   const t0 = performance.now() / 1000;
   const tick = () => { const t = performance.now() / 1000 - t0 + 0.37; drawDemo(t); processFrame(demoCv, t); };
   const restart = () => { clearInterval(demoTimer); demoTimer = setInterval(tick, 1000 / +$("demoFps").value); };
   restart();
   $("demoFps").onchange = () => { resetDecoder(); restart(); };
-  $("demoBps").onchange = () => resetDecoder();
+  $("demoRate").onchange = () => resetDecoder();
 }
 
 // ---------- 動画ファイル ----------
 // まずブラウザ内のデコーダ(WebCodecs)で1コマずつ取り出す。使えないときだけ <video> で再生する
 async function startVideoFile(file) {
   stopAll(); source = "video"; curRot = 0; setSourceUI();
-  markers = { clk: null, dat: null }; picking = "clk"; setPickUI();
+  pts = []; placeStep = 0; picking = 0; setPickUI();
   resetDecoder(); ring = []; smallAll = []; fileInfo = null; fileObj = file;
   const job = fileJob = { cancelled: false };
   $("badge").textContent = "動画を読み込んでいます…";
@@ -607,15 +760,14 @@ async function startVideoFile(file) {
   }
   startVideoElement(file, reason);
 }
-
 // 1回目:動画全体をざっと読み、LEDの場所を自動で探す
 async function scanFile(file, info, job) {
   curRot = info.rot; $("speedWrap").hidden = true;
   const keepAt = Math.min(info.samples.length - 1, Math.floor(info.fps * 1.5));
   let n = 0;
-  await decodeFile(file, info, job, (f, t) => {
+  await decodeFile(file, info, job, (f) => {
     const img = grab(f); if (!img) return;
-    smallAll.push(computeSmall(img));
+    if (smallAll.length < SCAN_MAX) smallAll.push(computeSmall(img));
     if (n++ === keepAt || n === 1) { still.width = f.displayWidth; still.height = f.displayHeight; sctx.drawImage(f, 0, 0); }
     if (n % 15 === 0) drawView(f);
   }, (p) => { $("badge").textContent = `LEDを探しています ${p}%`; });
@@ -623,20 +775,21 @@ async function scanFile(file, info, job) {
   fileInfo = info;
   drawView(still);
   const found = findLeds(smallAll);
-  const meta = `${info.codec} / ${info.fps.toFixed(0)}fps / ${info.duration.toFixed(1)}秒`;
   if (found) {
-    markers = found; drawView(still);
-    $("hint").textContent = "点滅の多いほうをクロック(C)、もう一方をデータ(D)にしました。違っていたらタップで直して「最初から解析」を押してください。";
+    pts = found; drawView(still);
+    $("hint").textContent = "LEDの位置を自動で決めました。違っていたらタップで直して「最初から解析」を押してください。";
     await analyzeFile();
   } else {
-    $("badge").textContent = meta;
-    $("hint").textContent = "点滅しているLEDを自動で見つけられませんでした。D1とD3をタップしてから「最初から解析」を押してください。";
+    $("badge").textContent = `${info.codec} / ${info.fps.toFixed(0)}fps / ${info.duration.toFixed(1)}秒`;
+    setPickUI();
+    $("hint").textContent = "LEDを自動で見つけられませんでした。" + $("hint").textContent + " 指定したら「最初から解析」を押してください。";
   }
 }
-// 2回目:指定した2か所の明るさを全コマで読み、復号する
+// 2回目:指定した位置の明るさを全コマで読み、復号する
 async function analyzeFile() {
   if (!fileInfo || !fileObj || analyzing) return;
-  if (!markers.clk || !markers.dat) { showErr("先にD1とD3の位置を指定してください。"); return; }
+  if (!ready()) { const f = findLeds(smallAll); if (f) pts = f; }
+  if (!ready()) { showErr("先にLEDの位置を指定してください。"); return; }
   $("err").hidden = true;
   analyzing = true; resetDecoder(); fpsTimes = [];
   const job = fileJob;
@@ -678,7 +831,6 @@ async function decodeFile(file, info, job, onFrame, onProgress) {
   if (vd.state !== "closed") vd.close();
   if (err) throw err;
 }
-
 // <video> で再生しながら読む方法(予備)
 function startVideoElement(file, reason) {
   curRot = 0; $("speedWrap").hidden = false; fileInfo = null;
@@ -699,7 +851,7 @@ function playVideo() {
   lastMediaTime = -1;
   vid.playbackRate = +$("speed").value;
   vid.play().catch(() => showErr("再生を始められませんでした。もう一度「最初から解析」を押してください。"));
-  loopVideo();
+  loopVideo(false);
 }
 // live=true(カメラ)のときは、映像の時刻ではなくコマが届いた時刻を使う
 function loopVideo(live) {
@@ -724,10 +876,10 @@ function loopVideo(live) {
 async function startCamera() {
   stopAll(); curRot = 0;
   if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-    showErr("この画面ではカメラを使えません。動画を撮影して「動画を読み込む」から解析してください。"); startDemo(); return;
+    startDemo(); showErr("この画面ではカメラを使えません。https:// のページで開くか、動画を撮影して読み込んでください。"); return;
   }
   try {
-    stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment", frameRate: { ideal: 60 }, width: { ideal: 1280 } }, audio: false });
+    stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment", width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: 60 } }, audio: false });
   } catch (e) {
     startDemo();
     showErr(location.protocol === "https:"
@@ -736,18 +888,18 @@ async function startCamera() {
     return;
   }
   source = "camera"; setSourceUI();
-  markers = { clk: null, dat: null }; picking = "clk"; setPickUI(); resetDecoder(); ring = [];
+  pts = []; placeStep = 0; picking = 0; setPickUI(); resetDecoder(); ring = [];
   vid.removeAttribute("src"); vid.srcObject = stream; await vid.play().catch(() => {});
   $("badge").textContent = "カメラ:LEDを探しています…";
-  $("hint").textContent = "D1とD3が映るように向けてください。自動で見つからないときは、タップで指定できます。";
   loopVideo(true);
   // LEDの位置が決まるまで、1秒ごとに自動で探す
   camFindTimer = setInterval(() => {
     if (source !== "camera") return;
-    if (markers.clk && markers.dat) { $("badge").textContent = "カメラ"; return; }
+    if (ready()) { $("badge").textContent = "カメラ"; return; }
+    if (pts.some(Boolean)) return;   // 手で指定している途中
     const found = findLeds(ring);
-    if (found) { markers = found; resetDecoder(); $("badge").textContent = "カメラ";
-      $("hint").textContent = "LEDを見つけました(C=クロック、D=データ)。違っていたらタップで直せます。"; }
+    if (found) { pts = found; resetDecoder(); $("badge").textContent = "カメラ";
+      $("hint").textContent = "LEDを見つけました。番号がずれていたら、D1とD10をタップし直してください。"; }
   }, 1000);
 }
 
@@ -769,28 +921,64 @@ function setSourceUI() {
   $("trackWrap").hidden = source !== "camera";
   if (source === "demo") $("badge").textContent = "デモ信号(実機ではありません)";
 }
+function setModeUI() {
+  $("modePar").setAttribute("aria-pressed", mode === "par");
+  $("modeSer").setAttribute("aria-pressed", mode === "ser");
+  $("parPick").hidden = mode !== "par";
+  $("serPick").hidden = mode !== "ser";
+  $("stPerrWrap").hidden = mode !== "par";
+  $("bitsTitle").textContent = mode === "par" ? "受け取ったシンボル(新しい順に右へ)" : "受け取ったビット(新しい順に右へ)";
+  const lg = $("legend");
+  lg.innerHTML = mode === "par"
+    ? '<span><span class="sw clk"></span> D1 クロック</span><span><span class="sw dat"></span> D2〜D9 データ</span><span><span class="sw par"></span> D10 パリティ</span><span>下の文字:クロックの切り替わりで読んだ内容(S=フレームの始まり、赤=パリティ誤り)</span>'
+    : '<span><span class="sw clk"></span> クロックLEDの明るさ</span><span><span class="sw dat"></span> データLEDの明るさ</span><span>縦線と数字:クロックが切り替わった瞬間に読んだビット</span>';
+  fillDemoRates();
+  setPickUI();
+}
 function setPickUI() {
-  $("pickClk").setAttribute("aria-pressed", picking === "clk");
-  $("pickDat").setAttribute("aria-pressed", picking === "dat");
-  $("hint").textContent = picking === "clk" ? "映像の上をタップして、クロックLED(D1)の位置を指定します。" : "映像の上をタップして、データLED(D3)の位置を指定します。";
+  if (mode === "ser") {
+    $("pickClk").setAttribute("aria-pressed", picking === 0);
+    $("pickDat").setAttribute("aria-pressed", picking === 1);
+    $("hint").textContent = picking === 0 ? "映像の上をタップして、クロックLED(D1)の位置を指定します。" : "映像の上をタップして、データLED(D3)の位置を指定します。";
+  } else {
+    $("hint").textContent = placeStep === 0
+      ? "映像の上で、まずD1(クロック)をタップし、次にD10(パリティ)をタップします。間の8個は等間隔に並べます。"
+      : "次にD10(パリティ)をタップしてください。";
+  }
+}
+function setMode(m) {
+  if (mode === m) return;
+  mode = m; setModeUI();
+  pts = source === "demo" ? demoPositions() : []; placeStep = 0; picking = 0;
+  resetDecoder();
+  if (fileInfo && !analyzing) { const f = findLeds(smallAll); if (f) pts = f; drawView(still); }
 }
 
 // ---------- LEDの位置指定 ----------
 view.addEventListener("click", (e) => {
   const rc = view.getBoundingClientRect();
-  markers[picking] = { x: (e.clientX - rc.left) / rc.width, y: (e.clientY - rc.top) / rc.height };
-  picking = picking === "clk" ? "dat" : "clk"; setPickUI();
+  const p = { x: (e.clientX - rc.left) / rc.width, y: (e.clientY - rc.top) / rc.height };
+  if (mode === "ser") {
+    pts[picking] = p; picking = 1 - picking;
+  } else {
+    const fix = +$("fixSel").value;
+    if (fix >= 0 && ready()) { pts[fix] = p; $("fixSel").value = "-1"; }
+    else if (placeStep === 0) { pts = [p, null, null, null, null, null, null, null, null, null]; placeStep = 1; }
+    else { pts = lineOf(pts[0], p); placeStep = 0; }
+  }
+  setPickUI();
   if (!analyzing) resetDecoder();
   if (fileInfo && !analyzing) drawView(still);
 });
-$("pickClk").onclick = () => { picking = "clk"; setPickUI(); };
-$("pickDat").onclick = () => { picking = "dat"; setPickUI(); };
+$("pickClk").onclick = () => { picking = 0; setPickUI(); };
+$("pickDat").onclick = () => { picking = 1; setPickUI(); };
+$("placeLine").onclick = () => { placeStep = 0; $("fixSel").value = "-1"; setPickUI(); };
 $("autoFind").onclick = () => {
   const found = findLeds(fileInfo ? smallAll : ring);
-  if (!found) { showErr("点滅しているLEDを2つ見つけられませんでした。数秒待つか、手動でタップして指定してください。"); return; }
-  $("err").hidden = true; markers = found; resetDecoder();
+  if (!found) { showErr("点滅しているLEDを見つけられませんでした。数秒待つか、手動でタップして指定してください。"); return; }
+  $("err").hidden = true; pts = found; placeStep = 0; resetDecoder();
   if (fileInfo && !analyzing) drawView(still);
-  $("hint").textContent = "点滅の多いほうをクロック(C)にしました。逆なら指定し直してください。";
+  $("hint").textContent = "点滅の様子から位置を決めました。ずれていたら指定し直してください。";
 };
 
 // ---------- 表示の更新 ----------
@@ -808,52 +996,93 @@ function renderLog() {
     const t = document.createElement("span"); t.textContent = f.t.toFixed(1) + "s";
     const s = document.createElement("span"); s.className = f.ok ? "ok" : "ng"; s.textContent = f.ok ? "成功" : "失敗";
     const body = document.createElement("span"); body.textContent = JSON.stringify(f.text);
-    const hx = document.createElement("span"); hx.className = "hex"; hx.textContent = hex(f.bytes); body.append(hx);
+    const hx = document.createElement("span"); hx.className = "hex";
+    hx.textContent = hex(f.bytes) + (f.perr ? `(パリティ誤り ${f.perr}個)` : ""); body.append(hx);
     li.append(t, s, body); ul.append(li);
   }
   renderMsg();
 }
+function symLabel(s) {
+  if (s === SYNC_SYM) return "S";
+  const b = s >> 1;
+  return b >= 32 && b < 127 ? String.fromCharCode(b) : b.toString(16).toUpperCase().padStart(2, "0");
+}
 function renderStats() {
   $("stFrames").textContent = dec.ok + " / " + dec.ng;
-  const bps = estimateBps(dec);
-  $("stBps").textContent = bps ? bps.toFixed(1) + " bps" : "–";
+  const rate = mode === "par" ? medianRate(dec.symTimes) : estimateBps(dec);
+  $("stBps").textContent = !rate ? "–" : mode === "par" ? `${rate.toFixed(1)}回/秒・${(rate * 8).toFixed(0)}bps` : `${rate.toFixed(1)} bps`;
   let fps = fileInfo ? fileInfo.fps : null;
   if (!fps && fpsTimes.length > 5) fps = (fpsTimes.length - 1) / (fpsTimes[fpsTimes.length - 1] - fpsTimes[0]);
   $("stFps").textContent = fps ? fps.toFixed(0) + " fps" : "–";
-  $("bits").textContent = dec.recent || "—";
-  const v = $("verdict");
-  if (!markers.clk || !markers.dat) { v.className = "verdict"; v.textContent = "LEDの位置を指定すると判定を始めます。"; return; }
-  if (!scopeBuf.length) { v.className = "verdict"; v.textContent = "解析を待っています。"; return; }
-  if (!dec.clk.valid) { v.className = "verdict bad"; v.textContent = "クロックLEDの点滅が見えません。位置か読み取る範囲を調整してください。"; return; }
-  if (bps && fps) {
-    const per = fps / bps;
-    if (per < 3) { v.className = "verdict bad"; v.textContent = `1ビットあたり約${per.toFixed(1)}コマ。速すぎて取りこぼす可能性があります。`; return; }
-    v.className = "verdict good"; v.textContent = `1ビットあたり約${per.toFixed(1)}コマ。カメラが追いつける速さです。`; return;
+  const part = $("partial");
+  if (mode === "par") {
+    $("stPerr").textContent = dec.parityErr;
+    $("bits").textContent = dec.recent.length ? dec.recent.map((s) => {
+      const bad = s !== SYNC_SYM && parity8(s >> 1) !== (s & 1);
+      return symLabel(s) === "S" ? "[S]" : hex([s >> 1]) + (bad ? "!" : "");
+    }).join(" ") : "—";
+    const receiving = dec.mode === "data" || dec.mode === "sum";
+    part.hidden = !receiving;
+    part.textContent = receiving ? "受信中:" + dec.partial + "▍" : "";
+  } else {
+    $("bits").textContent = dec.recent || "—"; part.hidden = true;
   }
-  v.className = "verdict"; v.textContent = "ビットを集めています…";
+  const v = $("verdict");
+  if (!ready()) { v.className = "verdict"; v.textContent = "LEDの位置を指定すると判定を始めます。"; return; }
+  if (!scopeBuf.length) { v.className = "verdict"; v.textContent = "解析を待っています。"; return; }
+  const clkOk = mode === "par" ? dec.ch[0].valid : dec.clk.valid;
+  if (!clkOk) { v.className = "verdict bad"; v.textContent = "クロックLED(D1)の点滅が見えません。位置か読み取る範囲を調整してください。"; return; }
+  if (rate && fps) {
+    const per = fps / rate, unit = mode === "par" ? "1シンボル" : "1ビット";
+    if (per < 3) { v.className = "verdict bad"; v.textContent = `${unit}あたり約${per.toFixed(1)}コマ。速すぎて取りこぼす可能性があります。`; return; }
+    v.className = "verdict good"; v.textContent = `${unit}あたり約${per.toFixed(1)}コマ。カメラが追いつける速さです。`; return;
+  }
+  v.className = "verdict"; v.textContent = "データを集めています…";
 }
 function drawScope() {
   const cv = $("scope"), dpr = window.devicePixelRatio || 1;
-  const W = cv.clientWidth, H = 170;
+  const W = cv.clientWidth, H = 190;
   if (cv.width !== Math.round(W * dpr)) { cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr); }
   const g = cv.getContext("2d"); g.setTransform(dpr, 0, 0, dpr, 0, 0); g.clearRect(0, 0, W, H);
   const line = css("--line"), muted = css("--muted");
+  const L0 = mode === "par" ? 34 : 0, PW = W - L0;
   g.strokeStyle = line; g.lineWidth = 1;
-  for (let i = 0; i <= 6; i++) { const x = W * i / 6; g.beginPath(); g.moveTo(x, 0); g.lineTo(x, H); g.stroke(); }
+  for (let i = 0; i <= 6; i++) { const x = L0 + PW * i / 6; g.beginPath(); g.moveTo(x, 0); g.lineTo(x, H); g.stroke(); }
+  g.font = "11px IBM Plex Mono, monospace";
+  if (mode === "par") for (let i = 0; i < 10; i++) { g.fillStyle = muted; g.fillText("D" + (i + 1), 0, 8 + i * 15 + 11); }
   if (scopeBuf.length < 2) return;
-  const tEnd = scopeBuf[scopeBuf.length - 1].t, tStart = tEnd - 6, X = (t) => (t - tStart) / 6 * W;
-  const lanes = [{ k: "cv", ch: dec.clk, col: css("--clk"), y0: 10, h: 60 }, { k: "dv", ch: dec.dat, col: css("--led"), y0: 85, h: 60 }];
-  for (const L of lanes) {
-    const lo = L.ch.lo ?? 0, hi = L.ch.hi ?? 1, rg = Math.max(1, hi - lo);
-    const Y = (v) => L.y0 + L.h - Math.max(0, Math.min(1, (v - lo) / rg)) * L.h;
-    g.setLineDash([4, 4]); g.strokeStyle = muted; g.beginPath(); g.moveTo(0, Y((hi + lo) / 2)); g.lineTo(W, Y((hi + lo) / 2)); g.stroke(); g.setLineDash([]);
-    g.strokeStyle = L.col; g.lineWidth = 1.8; g.beginPath();
-    scopeBuf.forEach((s, i) => { const x = X(s.t), y = Y(s[L.k]); i ? g.lineTo(x, y) : g.moveTo(x, y); }); g.stroke();
+  const tEnd = scopeBuf[scopeBuf.length - 1].t, tStart = tEnd - 6, X = (t) => L0 + (t - tStart) / 6 * PW;
+  if (mode === "par") {
+    // ロジックアナライザのように、10個のLEDの点灯を並べる
+    for (let i = 0; i < 10; i++) {
+      g.fillStyle = markerStyle(i).col;
+      const y = 8 + i * 15;
+      for (let k = 0; k < scopeBuf.length - 1; k++) {
+        if (scopeBuf[k].st[i] !== 1) continue;
+        const x0 = X(scopeBuf[k].t), x1 = X(scopeBuf[k + 1].t);
+        g.fillRect(x0, y + 2, Math.max(1, x1 - x0), 10);
+      }
+    }
+    for (const s of scopeBuf) if (s.sym !== null) {
+      const x = X(s.t); g.strokeStyle = muted; g.beginPath(); g.moveTo(x, 6); g.lineTo(x, 160); g.stroke();
+      const bad = s.sym !== SYNC_SYM && parity8(s.sym >> 1) !== (s.sym & 1);
+      g.fillStyle = bad ? css("--ng") : css("--ink");
+      const lb = symLabel(s.sym); g.fillText(lb, x - g.measureText(lb).width / 2, 180);
+    }
+    return;
   }
-  g.font = "11px IBM Plex Mono, monospace"; g.fillStyle = css("--ink");
+  const lanes = [{ k: "cv", ch: dec.clk, col: css("--clk"), y0: 10, h: 65 }, { k: "dv", ch: dec.dat, col: css("--led"), y0: 92, h: 65 }];
+  for (const Ln of lanes) {
+    const lo = Ln.ch.lo ?? 0, hi = Ln.ch.hi ?? 1, rg = Math.max(1, hi - lo);
+    const Y = (v) => Ln.y0 + Ln.h - Math.max(0, Math.min(1, (v - lo) / rg)) * Ln.h;
+    g.setLineDash([4, 4]); g.strokeStyle = muted; g.beginPath(); g.moveTo(0, Y((hi + lo) / 2)); g.lineTo(W, Y((hi + lo) / 2)); g.stroke(); g.setLineDash([]);
+    g.strokeStyle = Ln.col; g.lineWidth = 1.8; g.beginPath();
+    scopeBuf.forEach((s, i) => { const x = X(s.t), y = Y(s[Ln.k]); i ? g.lineTo(x, y) : g.moveTo(x, y); }); g.stroke();
+  }
+  g.fillStyle = css("--ink");
   for (const s of scopeBuf) if (s.bit !== null) {
-    const x = X(s.t); g.strokeStyle = muted; g.beginPath(); g.moveTo(x, 8); g.lineTo(x, 148); g.stroke();
-    g.fillText(String(s.bit), x - 3, 164);
+    const x = X(s.t); g.strokeStyle = muted; g.lineWidth = 1; g.beginPath(); g.moveTo(x, 8); g.lineTo(x, 162); g.stroke();
+    g.fillText(String(s.bit), x - 3, 180);
   }
 }
 let uiLast = 0;
@@ -865,6 +1094,8 @@ function uiLoop(now) {
 // ---------- ボタン ----------
 $("srcDemo").onclick = startDemo;
 $("srcCam").onclick = startCamera;
+$("modePar").onclick = () => setMode("par");
+$("modeSer").onclick = () => setMode("ser");
 $("fileIn").onchange = (e) => { const f = e.target.files[0]; e.target.value = ""; if (f) startVideoFile(f); };
 $("replay").onclick = () => {
   if (fileInfo) { analyzeFile(); return; }
@@ -873,5 +1104,5 @@ $("replay").onclick = () => {
 $("speed").onchange = () => { vid.playbackRate = +$("speed").value; };
 $("resetDec").onclick = resetDecoder;
 
-resetDecoder(); setPickUI(); startDemo(); requestAnimationFrame(uiLoop);
+setModeUI(); resetDecoder(); startDemo(); requestAnimationFrame(uiLoop);
 </script>
