@@ -1,0 +1,877 @@
+<title>LED光通信レシーバー</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans+JP:wght@400;500;700&family=Zen+Kaku+Gothic+New:wght@700;900&display=swap">
+<style>
+/* Layout: 計測器のパネル。左に映像(ステージ)、右に受信結果、下に波形スコープ */
+:root {
+  --bg: #eef1f4; --surface: #f9fbfc; --ink: #16202b; --muted: #586675; --line: #cdd5dd;
+  --led: #d9680a; --clk: #2a66c9; --ok: #1d8449; --ng: #c0392b; --stage: #0c1015; --stage-ink: #e9eef3;
+  --display: "Zen Kaku Gothic New", "Hiragino Sans", "Yu Gothic", sans-serif;
+  --body: "IBM Plex Sans JP", "Hiragino Sans", "Yu Gothic", sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #11161c; --surface: #19212a; --ink: #e5eaf0; --muted: #93a0ae; --line: #2b3540;
+  --led: #ff9a3c; --clk: #6fa2ff; --ok: #4cc27d; --ng: #ff6b5e; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #11161c; --surface: #19212a; --ink: #e5eaf0; --muted: #93a0ae; --line: #2b3540;
+  --led: #ff9a3c; --clk: #6fa2ff; --ok: #4cc27d; --ng: #ff6b5e; color-scheme: dark }
+
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--ink); font-family: var(--body); font-size: 15px; line-height: 1.6;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 20px 40px; }
+.wrap { max-width: 1120px; margin: 0 auto; display: grid; gap: 18px; }
+header { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 6px 16px; }
+h1 { font-family: var(--display); font-weight: 900; font-size: clamp(1.5rem, 4vw, 2.1rem); margin: 0; letter-spacing: .02em; text-wrap: balance; }
+h1 .dot { display: inline-block; width: .55em; height: .55em; border-radius: 50%; background: var(--led); margin-right: .35em;
+  box-shadow: 0 0 .6em var(--led); vertical-align: .08em; }
+h2 { font-family: var(--display); font-size: 1rem; margin: 0 0 8px; letter-spacing: .04em; }
+.sub { color: var(--muted); font-size: .9rem; margin: 0; }
+.label { font-size: .72rem; letter-spacing: .1em; color: var(--muted); text-transform: uppercase; font-family: var(--mono); }
+
+.main { display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr); gap: 18px; align-items: start; }
+@media (max-width: 820px) { .main { grid-template-columns: minmax(0, 1fr); } }
+.panel { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 14px; min-width: 0; }
+
+/* ソース切り替え */
+.sources { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }
+button, .filebtn, select { font: inherit; font-size: .9rem; border-radius: 7px; border: 1px solid var(--line); background: var(--bg);
+  color: var(--ink); padding: 7px 12px; cursor: pointer; }
+button:hover, .filebtn:hover { border-color: var(--muted); }
+button:focus-visible, .filebtn:focus-within, select:focus-visible { outline: 2px solid var(--clk); outline-offset: 2px; }
+button.primary { background: var(--ink); color: var(--bg); border-color: var(--ink); font-weight: 500; }
+button[aria-pressed="true"] { border-color: var(--led); box-shadow: inset 0 0 0 1px var(--led); }
+.filebtn input { position: absolute; width: 1px; height: 1px; opacity: 0; }
+.filebtn { position: relative; display: inline-flex; align-items: center; }
+
+.stage { position: relative; background: var(--stage); border-radius: 8px; overflow: hidden; aspect-ratio: 4 / 3; max-width: 100%; }
+.stage canvas { width: 100%; height: 100%; display: block; cursor: crosshair; touch-action: manipulation; }
+.badge { position: absolute; left: 10px; top: 10px; font-family: var(--mono); font-size: .72rem; letter-spacing: .08em;
+  color: var(--stage-ink); background: rgba(0,0,0,.55); padding: 3px 8px; border-radius: 4px; }
+.markers { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; align-items: center; }
+.chip { display: inline-flex; align-items: center; gap: 6px; }
+.sw { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+.sw.clk { background: var(--clk); } .sw.dat { background: var(--led); }
+.hint { font-size: .85rem; color: var(--muted); margin: 8px 0 0; }
+.row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 10px; }
+.row label { font-size: .85rem; color: var(--muted); display: inline-flex; gap: 6px; align-items: center; }
+input[type=range] { accent-color: var(--led); width: 110px; }
+.err { color: var(--ng); font-size: .88rem; margin: 8px 0 0; }
+
+/* 受信結果 */
+.msg { font-family: var(--mono); font-size: clamp(1.6rem, 5vw, 2.4rem); font-weight: 500; letter-spacing: .04em;
+  min-height: 1.4em; word-break: break-all; margin: 2px 0 4px; }
+.msg.wait { color: var(--muted); font-size: 1.1rem; font-family: var(--body); }
+.stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin: 12px 0; }
+.stat { border-top: 1px solid var(--line); padding-top: 6px; min-width: 0; }
+.stat b { display: block; font-family: var(--mono); font-weight: 500; font-size: 1.15rem; font-variant-numeric: tabular-nums; }
+.verdict { font-size: .85rem; padding: 6px 10px; border-radius: 6px; border: 1px solid var(--line); margin-top: 4px; }
+.verdict.good { border-color: var(--ok); color: var(--ok); } .verdict.bad { border-color: var(--ng); color: var(--ng); }
+.bits { font-family: var(--mono); font-size: .8rem; color: var(--muted); word-break: break-all; line-height: 1.5; margin: 0;
+  font-variant-numeric: tabular-nums; }
+.log { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
+.log li { display: grid; grid-template-columns: 3.2em 2.4em minmax(0, 1fr); gap: 8px; font-family: var(--mono); font-size: .8rem;
+  border-bottom: 1px dashed var(--line); padding-bottom: 4px; align-items: baseline; }
+.log .ok { color: var(--ok); } .log .ng { color: var(--ng); }
+.log .hex { color: var(--muted); display: block; font-size: .72rem; word-break: break-all; }
+.empty { color: var(--muted); font-size: .85rem; }
+
+.scope canvas { width: 100%; height: 170px; display: block; }
+.legend { display: flex; flex-wrap: wrap; gap: 14px; font-size: .82rem; color: var(--muted); margin-bottom: 6px; }
+
+.tips { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 18px; }
+.tips ol { margin: 0; padding-left: 1.3em; }
+.tips li { margin-bottom: 4px; font-size: .9rem; }
+.tips p { font-size: .9rem; margin: 0 0 6px; }
+code { font-family: var(--mono); font-size: .85em; }
+@media (prefers-reduced-motion: reduce) { h1 .dot { box-shadow: none; } }
+</style>
+
+<div class="wrap">
+  <header>
+    <h1><span class="dot" aria-hidden="true"></span>LED光通信レシーバー</h1>
+    <p class="sub">FPGAのLEDが送る光の点滅を、カメラ映像から文字に戻します</p>
+  </header>
+
+  <div class="main">
+    <section class="panel" aria-label="映像">
+      <div class="sources">
+        <button id="srcDemo" aria-pressed="true">デモ信号</button>
+        <label class="filebtn">動画を読み込む<input id="fileIn" type="file" accept="video/*"></label>
+        <button id="srcCam" aria-pressed="false">カメラ</button>
+      </div>
+      <div class="stage">
+        <canvas id="view" width="640" height="480" aria-label="映像。タップしてLEDの位置を指定"></canvas>
+        <span class="badge" id="badge">デモ信号(実機ではありません)</span>
+      </div>
+      <div class="markers">
+        <button id="pickClk" class="chip" aria-pressed="true"><span class="sw clk"></span>クロックLED(D1)を指定</button>
+        <button id="pickDat" class="chip" aria-pressed="false"><span class="sw dat"></span>データLED(D3)を指定</button>
+        <button id="autoFind">自動で探す</button>
+      </div>
+      <p class="hint" id="hint">映像の上をタップして、選んでいるLEDの位置を指定します。</p>
+      <div class="row" id="videoCtl" hidden>
+        <button id="replay" class="primary">最初から解析</button>
+        <label id="speedWrap">再生速度
+          <select id="speed"><option value="1">1倍</option><option value="0.5">0.5倍</option><option value="0.25">0.25倍</option></select>
+        </label>
+      </div>
+      <div class="row" id="demoCtl">
+        <label>デモの送信速度
+          <select id="demoBps"><option>5</option><option>10</option><option>15</option><option>20</option></select> bps
+        </label>
+        <label>デモのカメラ
+          <select id="demoFps"><option>30</option><option>60</option></select> fps
+        </label>
+      </div>
+      <div class="row">
+        <label for="radius">読み取る範囲<input id="radius" type="range" min="3" max="40" value="12"></label>
+        <button id="resetDec">受信をリセット</button>
+        <label id="trackWrap" hidden><input id="track" type="checkbox" checked>手ブレ補正</label>
+      </div>
+      <p class="err" id="err" hidden></p>
+    </section>
+
+    <section class="panel" aria-label="受信結果">
+      <span class="label">最後に正しく受け取ったメッセージ</span>
+      <p class="msg wait" id="msg">受信待ち…</p>
+      <div class="stats">
+        <div class="stat"><span class="label">フレーム 成功/失敗</span><b id="stFrames">0 / 0</b></div>
+        <div class="stat"><span class="label">推定速度</span><b id="stBps">–</b></div>
+        <div class="stat"><span class="label">映像</span><b id="stFps">–</b></div>
+      </div>
+      <div class="verdict" id="verdict">LEDの位置を指定すると判定を始めます。</div>
+      <h2 style="margin-top:14px">受け取ったビット(新しい順に右へ)</h2>
+      <p class="bits" id="bits">—</p>
+      <h2 style="margin-top:14px">フレームの記録</h2>
+      <ul class="log" id="log"><li class="empty" style="display:block;border:0">まだありません</li></ul>
+    </section>
+  </div>
+
+  <section class="panel scope" aria-label="波形">
+    <div class="legend">
+      <span><span class="sw clk"></span> クロックLEDの明るさ</span>
+      <span><span class="sw dat"></span> データLEDの明るさ</span>
+      <span>縦線と数字:クロックが切り替わった瞬間に読んだビット(直近6秒)</span>
+    </div>
+    <canvas id="scope" height="170"></canvas>
+  </section>
+
+  <section class="panel tips">
+    <div>
+      <h2>実機での試し方</h2>
+      <ol>
+        <li>FPGAに <code>optical_tx</code> を書き込み、D1とD3がオレンジに点滅するのを確認する。</li>
+        <li>スマホのカメラアプリで、ボードから20〜30cmの距離で撮影する。5bpsだと1フレームに16秒かかるので40秒ほど、PB0で10bpsにすれば20秒ほど撮る(60fpsで撮れるならそのほうが確実)。</li>
+        <li>撮影前にLED付近を長押ししてピントと明るさを固定し、明るさを少し下げると白飛びしにくい。</li>
+        <li>「動画を読み込む」で選び、D1とD3をタップするか「自動で探す」を押す。</li>
+      </ol>
+    </div>
+    <div>
+      <h2>表示の読み方</h2>
+      <p>フレームは <code>7E</code>・文字数・文字・チェックサムの順に並びます。チェックサムが合えば成功です。</p>
+      <p>カメラでリアルタイムに受信するときは、このページを https:// のページ(GitHub Pagesなど)で開きます。スマホは筆箱などに立てかけると安定します。小さな手ブレは「手ブレ補正」が追いかけます。</p>
+      <p>「1ビットあたりのコマ数」が3を下回ると、カメラが点滅を取りこぼしやすくなります。PB0で速度を上げて、どこまで読めるかを確かめてください。</p>
+    </div>
+  </section>
+</div>
+
+<video id="vid" muted playsinline hidden></video>
+
+<script>
+// ==CORE START==
+// ---- 送信側のモデル(VHDLの optical_tx と同じ動き) ----
+function makeFrameBytes(msg) {
+  const f = [0x7E, msg.length];
+  let sum = msg.length;
+  for (const ch of msg) { const b = ch.charCodeAt(0) & 0xFF; f.push(b); sum ^= b; }
+  f.push(sum);
+  return f;
+}
+function makeFrameBits(msg) {
+  const bits = [];
+  for (const b of makeFrameBytes(msg)) for (let i = 7; i >= 0; i--) bits.push((b >> i) & 1);
+  return bits;
+}
+// 時刻 t 秒でのLEDの状態。データはビットの始まりで変わり、クロックはビットの真ん中で反転する
+function txState(t, bps, bits) {
+  const T = 1 / bps;
+  const n = Math.floor(t / T);
+  const d = bits[((n % bits.length) + bits.length) % bits.length];
+  const toggles = Math.floor((t - T / 2) / T) + 1;
+  const c = ((toggles % 2) + 2) % 2;
+  return { c, d };
+}
+
+// ---- 明るさ → 0/1 の判定(明暗の幅に自動で追従し、ヒステリシス付き) ----
+function makeChannel() { return { lo: null, hi: null, state: 0, valid: false }; }
+function updateChannel(ch, v) {
+  if (ch.lo === null) { ch.lo = v; ch.hi = v; }
+  const r0 = ch.hi - ch.lo;
+  ch.hi = Math.max(v, ch.hi - 0.004 * r0);
+  ch.lo = Math.min(v, ch.lo + 0.004 * r0);
+  const range = ch.hi - ch.lo;
+  ch.valid = range > 12;
+  const mid = (ch.hi + ch.lo) / 2, h = range * 0.12;
+  if (v > mid + h) ch.state = 1; else if (v < mid - h) ch.state = 0;
+  return ch.state;
+}
+
+// ---- 復号:クロックが切り替わった瞬間のデータを1ビットとして読む ----
+function makeDecoder(onFrame) {
+  return { clk: makeChannel(), dat: makeChannel(), prevC: null, sh: 0, mode: "hunt", bitsIn: 0, len: 0, buf: [],
+    bitTimes: [], totalBits: 0, ok: 0, ng: 0, recent: "", onFrame };
+}
+function feed(dec, t, cv, dv) {
+  const c = updateChannel(dec.clk, cv);
+  const d = updateChannel(dec.dat, dv);
+  let bit = null;
+  if (dec.clk.valid && dec.prevC !== null && c !== dec.prevC) { bit = d; pushBit(dec, d, t); }
+  if (dec.clk.valid) dec.prevC = c;
+  return { c, d, bit };
+}
+function pushBit(dec, b, t) {
+  dec.totalBits++;
+  dec.bitTimes.push(t); if (dec.bitTimes.length > 41) dec.bitTimes.shift();
+  dec.recent = (dec.recent + b).slice(-120);
+  dec.sh = ((dec.sh << 1) | b) & 0xFF;
+  if (dec.mode === "hunt") {
+    if (dec.sh === 0x7E) { dec.mode = "len"; dec.bitsIn = 0; dec.buf = []; }
+    return;
+  }
+  if (++dec.bitsIn < 8) return;
+  dec.bitsIn = 0;
+  const byte = dec.sh;
+  if (dec.mode === "len") {
+    if (byte < 1 || byte > 64) { dec.mode = "hunt"; return; }
+    dec.len = byte; dec.mode = "data"; return;
+  }
+  if (dec.mode === "data") { dec.buf.push(byte); if (dec.buf.length === dec.len) dec.mode = "sum"; return; }
+  if (dec.mode === "sum") {
+    let x = dec.len; for (const v of dec.buf) x ^= v;
+    const ok = x === byte;
+    if (ok) dec.ok++; else dec.ng++;
+    const bytes = [0x7E, dec.len, ...dec.buf, byte];
+    dec.mode = "hunt";
+    if (dec.onFrame) dec.onFrame({ ok, t, bytes, text: String.fromCharCode(...dec.buf) });
+  }
+}
+function estimateBps(dec) {
+  const ts = dec.bitTimes; if (ts.length < 6) return null;
+  const d = []; for (let i = 1; i < ts.length; i++) d.push(ts[i] - ts[i - 1]);
+  d.sort((a, b) => a - b);
+  const m = d[Math.floor(d.length / 2)];
+  return m > 0 ? 1 / m : null;
+}
+// ---- 手ブレ補正:クロックLEDが点いている間、その光の重心を追いかけて2つの印を一緒に動かす ----
+// img は {width, height, data(RGBA)}、印の座標は 0〜1、r は読み取り半径(img の画素)
+// tr は追跡用の記憶 { peak }(印を置き直したら新しく作る)
+function trackStep(img, clk, dat, tr, r) {
+  const W = img.width, H = img.height, d = img.data, cx = clk.x * W, cy = clk.y * H;
+  const sep = Math.hypot((clk.x - dat.x) * W, (clk.y - dat.y) * H);
+  const R = Math.max(4, Math.min(r * 3, sep * 0.45));
+  let max = 0, sum = 0, n = 0;
+  const lum = (i) => 0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2];
+  const x0 = Math.max(0, Math.floor(cx - R)), x1 = Math.min(W - 1, Math.ceil(cx + R));
+  const y0 = Math.max(0, Math.floor(cy - R)), y1 = Math.min(H - 1, Math.ceil(cy + R));
+  for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) { const v = lum((y * W + x) * 4); if (v > max) max = v; sum += v; n++; }
+  // 探す範囲の中で一番明るい点が、最近の最大値に近く、背景よりはっきり明るいとき = クロックLEDが点灯中
+  tr.peak = Math.max(max, (tr.peak || 0) * 0.995);
+  if (!n || max < tr.peak * 0.7 || max - sum / n < 30) return null;
+  const th = max * 0.75;
+  let sw = 0, sx = 0, sy = 0;
+  for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) {
+    if ((x - cx) ** 2 + (y - cy) ** 2 > R * R) continue;
+    const v = lum((y * W + x) * 4) - th;
+    if (v > 0) { sw += v; sx += v * x; sy += v * y; }
+  }
+  if (sw <= 0) return null;
+  const dx = (sx / sw - cx) * 0.5 / W, dy = (sy / sw - cy) * 0.5 / H;
+  return { clk: { x: clk.x + dx, y: clk.y + dy }, dat: { x: dat.x + dx, y: dat.y + dy } };
+}
+// ==CORE END==
+
+// ==DEMUX START==
+// ---- MP4 / MOV の中身を読み、映像の1コマずつの位置と設定を取り出す ----
+function str4(u8, p) { return String.fromCharCode(u8[p], u8[p + 1], u8[p + 2], u8[p + 3]); }
+function boxList(u8, start, end) {
+  const dv = new DataView(u8.buffer, u8.byteOffset, u8.byteLength), out = [];
+  let p = start;
+  while (p + 8 <= end) {
+    let s = dv.getUint32(p), h = 8;
+    const t = str4(u8, p + 4);
+    if (s === 1) { s = Number(dv.getBigUint64(p + 8)); h = 16; } else if (s === 0) s = end - p;
+    if (s < h || p + s > end) break;
+    out.push({ type: t, start: p, cs: p + h, end: p + s });
+    p += s;
+  }
+  return out;
+}
+function boxPath(u8, box, ...types) {
+  let b = box;
+  for (const t of types) { b = boxList(u8, b.cs, b.end).find((x) => x.type === t); if (!b) return null; }
+  return b;
+}
+function hex2(n) { return n.toString(16).padStart(2, "0"); }
+function codecString(entry, cfgType, c) {
+  if (cfgType === "avcC") return entry + "." + hex2(c[1]) + hex2(c[2]) + hex2(c[3]);
+  // hvcC
+  const space = c[1] >> 6, tier = (c[1] >> 5) & 1, prof = c[1] & 0x1f;
+  let compat = ((c[2] << 24) | (c[3] << 16) | (c[4] << 8) | c[5]) >>> 0, rev = 0;
+  for (let i = 0; i < 32; i++) { rev = ((rev << 1) | (compat & 1)) >>> 0; compat >>>= 1; }
+  let s = entry + "." + ["", "A", "B", "C"][space] + prof + "." + rev.toString(16) + "." + (tier ? "H" : "L") + c[12];
+  const cons = Array.from(c.subarray(6, 12));
+  while (cons.length && cons[cons.length - 1] === 0) cons.pop();
+  for (const b of cons) s += "." + b.toString(16);
+  return s;
+}
+// read(offset, length) は Uint8Array を返す Promise
+async function demuxMp4(read, size) {
+  let pos = 0, moov = null;
+  while (pos + 8 <= size) {
+    const h = await read(pos, Math.min(16, size - pos));
+    const dv = new DataView(h.buffer, h.byteOffset, h.byteLength);
+    let s = dv.getUint32(0);
+    const t = str4(h, 4);
+    if (s === 1) s = Number(dv.getBigUint64(8)); else if (s === 0) s = size - pos;
+    if (s < 8) throw new Error("動画ファイルの形式を読み取れませんでした");
+    if (t === "moov") { moov = await read(pos, s); break; }
+    pos += s;
+  }
+  if (!moov) throw new Error("動画の目次(moov)が見つかりませんでした");
+  const top = boxList(moov, 0, moov.length)[0];
+  const dv = new DataView(moov.buffer, moov.byteOffset, moov.byteLength);
+  for (const trak of boxList(moov, top.cs, top.end).filter((b) => b.type === "trak")) {
+    const hdlr = boxPath(moov, trak, "mdia", "hdlr");
+    if (!hdlr || str4(moov, hdlr.cs + 8) !== "vide") continue;
+    const mdhd = boxPath(moov, trak, "mdia", "mdhd");
+    const timescale = dv.getUint32(mdhd.cs + (moov[mdhd.cs] === 1 ? 20 : 12));
+    // 回転(縦撮り)の情報
+    const tkhd = boxPath(moov, trak, "tkhd");
+    let rot = 0;
+    if (tkhd) {
+      const m = tkhd.cs + (moov[tkhd.cs] === 1 ? 52 : 40);
+      const a = dv.getInt32(m), b = dv.getInt32(m + 4), c = dv.getInt32(m + 12), d = dv.getInt32(m + 16);
+      if (a === 0 && b > 0 && c < 0) rot = 90; else if (a < 0 && d < 0) rot = 180; else if (a === 0 && b < 0 && c > 0) rot = 270;
+    }
+    const stbl = boxPath(moov, trak, "mdia", "minf", "stbl");
+    const stsd = boxPath(moov, stbl, "stsd");
+    const e = stsd.cs + 8, eSize = dv.getUint32(e), entry = str4(moov, e + 4);
+    const width = dv.getUint16(e + 32), height = dv.getUint16(e + 34);
+    const cfg = boxList(moov, e + 86, e + eSize).find((x) => x.type === "avcC" || x.type === "hvcC");
+    if (!cfg) throw new Error("この動画の形式(" + entry + ")には対応していません。H.264かHEVCで撮影してください");
+    const description = moov.slice(cfg.cs, cfg.end);
+    const codec = codecString(entry, cfg.type, description);
+    const tbl = (t) => boxPath(moov, stbl, t);
+    // コマの大きさ
+    const stsz = tbl("stsz"), fixed = dv.getUint32(stsz.cs + 4), count = dv.getUint32(stsz.cs + 8);
+    const sizes = new Array(count);
+    for (let i = 0; i < count; i++) sizes[i] = fixed || dv.getUint32(stsz.cs + 12 + 4 * i);
+    // チャンクの位置
+    const stco = tbl("stco"), co64 = tbl("co64"), chunkOff = [];
+    if (stco) { const n = dv.getUint32(stco.cs + 4); for (let i = 0; i < n; i++) chunkOff.push(dv.getUint32(stco.cs + 8 + 4 * i)); }
+    else { const n = dv.getUint32(co64.cs + 4); for (let i = 0; i < n; i++) chunkOff.push(Number(dv.getBigUint64(co64.cs + 8 + 8 * i))); }
+    const stsc = tbl("stsc"), nsc = dv.getUint32(stsc.cs + 4), offsets = new Array(count);
+    let si = 0;
+    for (let j = 0; j < nsc && si < count; j++) {
+      const first = dv.getUint32(stsc.cs + 8 + 12 * j), spc = dv.getUint32(stsc.cs + 12 + 12 * j);
+      const next = j + 1 < nsc ? dv.getUint32(stsc.cs + 8 + 12 * (j + 1)) : chunkOff.length + 1;
+      for (let ch = first; ch < next && si < count; ch++) {
+        let off = chunkOff[ch - 1];
+        for (let k = 0; k < spc && si < count; k++) { offsets[si] = off; off += sizes[si]; si++; }
+      }
+    }
+    // 時刻
+    const stts = tbl("stts"), nst = dv.getUint32(stts.cs + 4), dts = new Array(count);
+    let t = 0; si = 0;
+    for (let j = 0; j < nst; j++) {
+      const n = dv.getUint32(stts.cs + 8 + 8 * j), dl = dv.getUint32(stts.cs + 12 + 8 * j);
+      for (let k = 0; k < n && si < count; k++) { dts[si++] = t; t += dl; }
+    }
+    while (si < count) dts[si++] = t;
+    const cts = dts.slice(), ctts = tbl("ctts");
+    if (ctts) {
+      const n = dv.getUint32(ctts.cs + 4); si = 0;
+      for (let j = 0; j < n; j++) {
+        const c = dv.getUint32(ctts.cs + 8 + 8 * j), o = dv.getInt32(ctts.cs + 12 + 8 * j);
+        for (let k = 0; k < c && si < count; k++) cts[si++] += o;
+      }
+    }
+    const stss = tbl("stss"), sync = new Array(count).fill(!stss);
+    if (stss) { const n = dv.getUint32(stss.cs + 4); for (let j = 0; j < n; j++) sync[dv.getUint32(stss.cs + 8 + 4 * j) - 1] = true; }
+    const samples = [];
+    for (let i = 0; i < count; i++) samples.push({ offset: offsets[i], size: sizes[i], dts: dts[i], cts: cts[i], sync: sync[i] });
+    const dur = (t || 1) / timescale;
+    return { codec, description, cfgType: cfg.type, width, height, timescale, rot, samples, fps: count / dur, duration: dur,
+      config: { codec, description, codedWidth: width, codedHeight: height } };
+  }
+  throw new Error("動画の映像トラックが見つかりませんでした");
+}
+// ==DEMUX END==
+
+// ================= ここから画面まわり =================
+const $ = (id) => document.getElementById(id);
+const view = $("view"), vctx = view.getContext("2d");
+const proc = document.createElement("canvas"); proc.width = 320; proc.height = 240;
+const pctx = proc.getContext("2d", { willReadFrequently: true });
+const demoCv = document.createElement("canvas"); demoCv.width = 640; demoCv.height = 480;
+const dctx = demoCv.getContext("2d");
+const still = document.createElement("canvas"), sctx = still.getContext("2d");
+const vid = $("vid");
+
+const DEMO_MSG = "HI FPGA";
+const DEMO_BITS = makeFrameBits(DEMO_MSG);
+const DEMO_LEDS = []; // 5個×2列。D1〜D5 が左列、D6〜D10 が右列
+for (let col = 0; col < 2; col++) for (let row = 0; row < 5; row++) DEMO_LEDS.push({ x: 0.40 + col * 0.22, y: 0.18 + row * 0.16 });
+
+let source = "demo";
+let markers = { clk: { ...DEMO_LEDS[0] }, dat: { ...DEMO_LEDS[2] } };
+let picking = "clk";
+let dec, scopeBuf = [], frames = [], lastMsg = null;
+let fpsTimes = [], demoTimer = null, rvfcId = null, stream = null, lastMediaTime = -1;
+let curRot = 0;                  // 動画の回転(縦撮りなど)
+let camFindTimer = null, trk = { peak: 0 };
+let fileJob = null, fileInfo = null, fileObj = null, analyzing = false;
+const SMALL_W = 80, SMALL_H = 60, RING = 90;
+let ring = [], smallAll = [];
+
+function resetDecoder() {
+  trk = { peak: 0 };
+  dec = makeDecoder((f) => { frames.unshift(f); frames = frames.slice(0, 8); if (f.ok) lastMsg = f.text; renderLog(); });
+  scopeBuf = []; frames = []; lastMsg = null; renderLog(); renderMsg();
+}
+
+// ---------- 映像の大きさと描画(回転を考慮) ----------
+function srcSize(src) {
+  const w = src.displayWidth || src.videoWidth || src.width, h = src.displayHeight || src.videoHeight || src.height;
+  return curRot % 180 ? [h, w] : [w, h];
+}
+function drawSrc(ctx, src, W, H) {
+  if (!curRot) { ctx.drawImage(src, 0, 0, W, H); return; }
+  ctx.save(); ctx.translate(W / 2, H / 2); ctx.rotate(curRot * Math.PI / 180);
+  const w0 = curRot % 180 ? H : W, h0 = curRot % 180 ? W : H;
+  ctx.drawImage(src, -w0 / 2, -h0 / 2, w0, h0); ctx.restore();
+}
+function grab(src) {
+  const [sw, sh] = srcSize(src);
+  if (!sw || !sh) return null;
+  const ph = Math.round(320 * sh / sw);
+  if (proc.height !== ph) proc.height = ph;
+  drawSrc(pctx, src, 320, ph);
+  return pctx.getImageData(0, 0, 320, ph);
+}
+
+// ---------- 1コマぶんの処理 ----------
+function processFrame(src, t) {
+  const img = grab(src);
+  if (!img) return;
+  if (markers.clk && markers.dat) {
+    const r = +$("radius").value * 320 / 640;
+    const cv = sampleAt(img, markers.clk, r), dv = sampleAt(img, markers.dat, r);
+    const res = feed(dec, t, cv, dv);
+    scopeBuf.push({ t, cv, dv, bit: res.bit });
+    while (scopeBuf.length && scopeBuf[0].t < t - 6) scopeBuf.shift();
+    if (source === "camera" && $("track").checked) {
+      const moved = trackStep(img, markers.clk, markers.dat, trk, r);
+      if (moved) markers = moved;
+    }
+  }
+  ring.push(computeSmall(img)); if (ring.length > RING) ring.shift();
+  fpsTimes.push(t); if (fpsTimes.length > 31) fpsTimes.shift();
+  drawView(src);
+}
+function sampleAt(img, m, r) {
+  const W = img.width, H = img.height, cx = m.x * W, cy = m.y * H, d = img.data;
+  let s = 0, n = 0;
+  for (let y = Math.max(0, Math.floor(cy - r)); y <= Math.min(H - 1, Math.ceil(cy + r)); y++)
+    for (let x = Math.max(0, Math.floor(cx - r)); x <= Math.min(W - 1, Math.ceil(cx + r)); x++) {
+      if ((x - cx) ** 2 + (y - cy) ** 2 > r * r) continue;
+      const i = (y * W + x) * 4; s += 0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2]; n++;
+    }
+  return n ? s / n : 0;
+}
+function computeSmall(img) {
+  const W = img.width, H = img.height, d = img.data, out = new Uint8ClampedArray(SMALL_W * SMALL_H);
+  for (let y = 0; y < SMALL_H; y++) for (let x = 0; x < SMALL_W; x++) {
+    const sx = Math.floor(x * W / SMALL_W), sy = Math.floor(y * H / SMALL_H), i = (sy * W + sx) * 4;
+    out[y * SMALL_W + x] = 0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2];
+  }
+  return out;
+}
+function drawView(src) {
+  const [sw, sh] = srcSize(src);
+  if (!sw || !sh) return;
+  const W = 640, H = Math.round(640 * sh / sw);
+  if (view.height !== H) view.height = H;
+  view.parentElement.style.aspectRatio = W + " / " + H;
+  drawSrc(vctx, src, W, H);
+  const r = +$("radius").value;
+  for (const [k, col, name] of [["clk", css("--clk"), "C"], ["dat", css("--led"), "D"]]) {
+    const m = markers[k]; if (!m) continue;
+    vctx.lineWidth = 2.5; vctx.strokeStyle = col;
+    vctx.beginPath(); vctx.arc(m.x * W, m.y * H, r, 0, Math.PI * 2); vctx.stroke();
+    vctx.font = "600 15px IBM Plex Mono, monospace"; vctx.fillStyle = col;
+    vctx.fillText(name, m.x * W + r + 4, m.y * H - r);
+  }
+}
+function css(v) { return getComputedStyle(document.documentElement).getPropertyValue(v).trim(); }
+
+// ---------- 点滅しているLEDを2か所探す(切り替わりが多いほうをクロックとみなす) ----------
+function findLeds(list) {
+  if (list.length < 30) return null;
+  const N = list.length, P = SMALL_W * SMALL_H, varr = new Float32Array(P);
+  for (let p = 0; p < P; p++) {
+    let s = 0, s2 = 0; for (const f of list) { s += f[p]; s2 += f[p] * f[p]; }
+    varr[p] = s2 / N - (s / N) ** 2;
+  }
+  const peaks = [];
+  for (let k = 0; k < 2; k++) {
+    let best = -1, bi = 0;
+    for (let p = 0; p < P; p++) if (varr[p] > best) { best = varr[p]; bi = p; }
+    if (best < 50) break;
+    peaks.push(bi);
+    const bx = bi % SMALL_W, by = Math.floor(bi / SMALL_W);
+    for (let y = by - 6; y <= by + 6; y++) for (let x = bx - 6; x <= bx + 6; x++)
+      if (x >= 0 && y >= 0 && x < SMALL_W && y < SMALL_H) varr[y * SMALL_W + x] = -1;
+  }
+  if (peaks.length < 2) return null;
+  const flips = peaks.map((p) => { const ch = makeChannel(); let prev = null, n = 0;
+    for (const f of list) { const s = updateChannel(ch, f[p]); if (prev !== null && s !== prev) n++; prev = s; } return n; });
+  const pos = peaks.map((p) => ({ x: (p % SMALL_W + 0.5) / SMALL_W, y: (Math.floor(p / SMALL_W) + 0.5) / SMALL_H }));
+  const ci = flips[0] >= flips[1] ? 0 : 1;
+  return { clk: pos[ci], dat: pos[1 - ci] };
+}
+
+// ---------- デモ信号:実機ボードを真似た映像を作る ----------
+function drawDemo(t) {
+  const W = 640, H = 480, bps = +$("demoBps").value, fps = +$("demoFps").value;
+  dctx.fillStyle = "#16301f"; dctx.fillRect(0, 0, W, H);
+  dctx.fillStyle = "#1d3b28"; dctx.fillRect(170, 30, 300, 420);
+  dctx.fillStyle = "#c9b98a"; dctx.font = "13px monospace";
+  DEMO_LEDS.forEach((p, i) => dctx.fillText("D" + (i + 1), p.x * W - 52, p.y * H + 5));
+  // 露光時間ぶんの平均をとる(カメラは一瞬ではなく少しの時間ためて撮る)
+  const exp = 0.6 / fps, sub = 6;
+  let onC = 0, onD = 0;
+  for (let k = 0; k < sub; k++) { const s = txState(t - exp * k / sub, bps, DEMO_BITS); onC += s.c; onD += s.d; }
+  const lit = [onC / sub, 0, onD / sub, 0, 0, 0, 0, 0, 0, 0];
+  DEMO_LEDS.forEach((p, i) => {
+    const x = p.x * W, y = p.y * H, a = lit[i] * (0.85 + Math.random() * 0.15);
+    dctx.fillStyle = "#d8d2c4"; dctx.fillRect(x - 15, y - 10, 30, 20);
+    if (a > 0.02) {
+      const g = dctx.createRadialGradient(x, y, 2, x, y, 34);
+      g.addColorStop(0, `rgba(255,236,190,${a})`); g.addColorStop(0.35, `rgba(255,150,40,${a * 0.85})`); g.addColorStop(1, "rgba(255,120,20,0)");
+      dctx.fillStyle = g; dctx.fillRect(x - 36, y - 36, 72, 72);
+    }
+  });
+  dctx.fillStyle = "rgba(255,255,255,0.05)";
+  for (let k = 0; k < 120; k++) dctx.fillRect(Math.random() * W, Math.random() * H, 2, 2);
+}
+function startDemo() {
+  stopAll(); source = "demo"; curRot = 0; setSourceUI();
+  markers = { clk: { ...DEMO_LEDS[0] }, dat: { ...DEMO_LEDS[2] } };
+  resetDecoder();
+  const t0 = performance.now() / 1000;
+  const tick = () => { const t = performance.now() / 1000 - t0 + 0.37; drawDemo(t); processFrame(demoCv, t); };
+  const restart = () => { clearInterval(demoTimer); demoTimer = setInterval(tick, 1000 / +$("demoFps").value); };
+  restart();
+  $("demoFps").onchange = () => { resetDecoder(); restart(); };
+  $("demoBps").onchange = () => resetDecoder();
+}
+
+// ---------- 動画ファイル ----------
+// まずブラウザ内のデコーダ(WebCodecs)で1コマずつ取り出す。使えないときだけ <video> で再生する
+async function startVideoFile(file) {
+  stopAll(); source = "video"; curRot = 0; setSourceUI();
+  markers = { clk: null, dat: null }; picking = "clk"; setPickUI();
+  resetDecoder(); ring = []; smallAll = []; fileInfo = null; fileObj = file;
+  const job = fileJob = { cancelled: false };
+  $("badge").textContent = "動画を読み込んでいます…";
+  let reason = "";
+  if ("VideoDecoder" in window) {
+    try {
+      const read = (o, l) => file.slice(o, o + l).arrayBuffer().then((b) => new Uint8Array(b));
+      const info = await demuxMp4(read, file.size);
+      const sup = await VideoDecoder.isConfigSupported(info.config);
+      if (!sup.supported) throw new Error("このブラウザはこの動画の形式(" + info.codec + ")を読めません");
+      if (job.cancelled) return;
+      await scanFile(file, info, job);
+      return;
+    } catch (e) {
+      if (job.cancelled) return;
+      reason = e && e.message ? e.message : String(e);
+    }
+  } else {
+    reason = "このブラウザには動画を1コマずつ読む機能(WebCodecs)がありません";
+  }
+  startVideoElement(file, reason);
+}
+
+// 1回目:動画全体をざっと読み、LEDの場所を自動で探す
+async function scanFile(file, info, job) {
+  curRot = info.rot; $("speedWrap").hidden = true;
+  const keepAt = Math.min(info.samples.length - 1, Math.floor(info.fps * 1.5));
+  let n = 0;
+  await decodeFile(file, info, job, (f, t) => {
+    const img = grab(f); if (!img) return;
+    smallAll.push(computeSmall(img));
+    if (n++ === keepAt || n === 1) { still.width = f.displayWidth; still.height = f.displayHeight; sctx.drawImage(f, 0, 0); }
+    if (n % 15 === 0) drawView(f);
+  }, (p) => { $("badge").textContent = `LEDを探しています ${p}%`; });
+  if (job.cancelled) return;
+  fileInfo = info;
+  drawView(still);
+  const found = findLeds(smallAll);
+  const meta = `${info.codec} / ${info.fps.toFixed(0)}fps / ${info.duration.toFixed(1)}秒`;
+  if (found) {
+    markers = found; drawView(still);
+    $("hint").textContent = "点滅の多いほうをクロック(C)、もう一方をデータ(D)にしました。違っていたらタップで直して「最初から解析」を押してください。";
+    await analyzeFile();
+  } else {
+    $("badge").textContent = meta;
+    $("hint").textContent = "点滅しているLEDを自動で見つけられませんでした。D1とD3をタップしてから「最初から解析」を押してください。";
+  }
+}
+// 2回目:指定した2か所の明るさを全コマで読み、復号する
+async function analyzeFile() {
+  if (!fileInfo || !fileObj || analyzing) return;
+  if (!markers.clk || !markers.dat) { showErr("先にD1とD3の位置を指定してください。"); return; }
+  $("err").hidden = true;
+  analyzing = true; resetDecoder(); fpsTimes = [];
+  const job = fileJob;
+  try {
+    await decodeFile(fileObj, fileInfo, job, (f, t) => processFrame(f, t),
+      (p) => { $("badge").textContent = `解析中 ${p}%`; });
+    if (!job.cancelled) $("badge").textContent = `解析完了:成功 ${dec.ok} / 失敗 ${dec.ng}`;
+  } catch (e) {
+    if (!job.cancelled) showErr("解析の途中で止まりました:" + (e.message || e));
+  } finally { analyzing = false; }
+}
+async function decodeFile(file, info, job, onFrame, onProgress) {
+  let err = null;
+  const S = info.samples, total = S.length;
+  const vd = new VideoDecoder({
+    output: (f) => { try { if (!job.cancelled) onFrame(f, f.timestamp / 1e6); } finally { f.close(); } },
+    error: (e) => { err = e; }
+  });
+  vd.configure(info.config);
+  for (let i = 0; i < total && !err && !job.cancelled;) {
+    // 近くにあるコマをまとめて読み込む
+    let j = i, lo = S[i].offset, hi = S[i].offset + S[i].size;
+    while (j + 1 < total && j - i < 59) {
+      const s = S[j + 1], nlo = Math.min(lo, s.offset), nhi = Math.max(hi, s.offset + s.size);
+      if (nhi - nlo > 8e6) break;
+      lo = nlo; hi = nhi; j++;
+    }
+    const buf = new Uint8Array(await file.slice(lo, hi).arrayBuffer());
+    for (let k = i; k <= j && !err; k++) {
+      const s = S[k];
+      vd.decode(new EncodedVideoChunk({ type: s.sync ? "key" : "delta", timestamp: Math.round(s.cts * 1e6 / info.timescale),
+        data: buf.subarray(s.offset - lo, s.offset - lo + s.size) }));
+    }
+    i = j + 1;
+    while (vd.decodeQueueSize > 30 && !err && !job.cancelled) await new Promise((r) => setTimeout(r, 4));
+    onProgress(Math.round(100 * i / total));
+  }
+  if (!err && !job.cancelled) await vd.flush().catch((e) => { err = e; });
+  if (vd.state !== "closed") vd.close();
+  if (err) throw err;
+}
+
+// <video> で再生しながら読む方法(予備)
+function startVideoElement(file, reason) {
+  curRot = 0; $("speedWrap").hidden = false; fileInfo = null;
+  vid.srcObject = null; vid.src = URL.createObjectURL(file); vid.loop = false;
+  let loaded = false;
+  vid.onloadeddata = () => { loaded = true; vid.currentTime = 0; playVideo(); };
+  vid.onended = () => { $("badge").textContent = "動画の最後まで解析しました"; };
+  vid.onerror = () => fail();
+  const fail = () => {
+    $("badge").textContent = "動画を読み込めませんでした";
+    showErr("この画面ではこの動画を読み込めませんでした。" + (reason ? "(" + reason + ")" : "") +
+      " 受信ページのHTMLファイルをPCに保存してChromeで開き、そこから動画を読み込むと確実です。");
+  };
+  setTimeout(() => { if (!loaded && source === "video" && !fileInfo) fail(); }, 5000);
+  $("badge").textContent = file.name;
+}
+function playVideo() {
+  lastMediaTime = -1;
+  vid.playbackRate = +$("speed").value;
+  vid.play().catch(() => showErr("再生を始められませんでした。もう一度「最初から解析」を押してください。"));
+  loopVideo();
+}
+// live=true(カメラ)のときは、映像の時刻ではなくコマが届いた時刻を使う
+function loopVideo(live) {
+  if ("requestVideoFrameCallback" in HTMLVideoElement.prototype) {
+    const cb = (now, meta) => {
+      const t = live ? (meta.expectedDisplayTime || now) / 1000 : meta.mediaTime;
+      const key = live ? meta.presentedFrames : meta.mediaTime;
+      if (key !== lastMediaTime) { lastMediaTime = key; processFrame(vid, t); }
+      if (!vid.paused && !vid.ended) rvfcId = vid.requestVideoFrameCallback(cb);
+    };
+    rvfcId = vid.requestVideoFrameCallback(cb);
+  } else {
+    const cb = (now) => {
+      if (vid.currentTime !== lastMediaTime) { lastMediaTime = vid.currentTime; processFrame(vid, live ? now / 1000 : vid.currentTime); }
+      if (!vid.paused && !vid.ended) rvfcId = requestAnimationFrame(cb);
+    };
+    rvfcId = requestAnimationFrame(cb);
+  }
+}
+
+// ---------- カメラ ----------
+async function startCamera() {
+  stopAll(); curRot = 0;
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    showErr("この画面ではカメラを使えません。動画を撮影して「動画を読み込む」から解析してください。"); startDemo(); return;
+  }
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment", frameRate: { ideal: 60 }, width: { ideal: 1280 } }, audio: false });
+  } catch (e) {
+    startDemo();
+    showErr(location.protocol === "https:"
+      ? "カメラを使えませんでした。claude.ai上のページや、カメラを許可しなかった場合は使えません。GitHub Pagesなどに置いたページで開くか、動画を撮影して読み込んでください。"
+      : "カメラを使えませんでした。スマホのカメラは https:// で始まるページでしか使えません。GitHub Pagesなどに置いて開いてください。");
+    return;
+  }
+  source = "camera"; setSourceUI();
+  markers = { clk: null, dat: null }; picking = "clk"; setPickUI(); resetDecoder(); ring = [];
+  vid.removeAttribute("src"); vid.srcObject = stream; await vid.play().catch(() => {});
+  $("badge").textContent = "カメラ:LEDを探しています…";
+  $("hint").textContent = "D1とD3が映るように向けてください。自動で見つからないときは、タップで指定できます。";
+  loopVideo(true);
+  // LEDの位置が決まるまで、1秒ごとに自動で探す
+  camFindTimer = setInterval(() => {
+    if (source !== "camera") return;
+    if (markers.clk && markers.dat) { $("badge").textContent = "カメラ"; return; }
+    const found = findLeds(ring);
+    if (found) { markers = found; resetDecoder(); $("badge").textContent = "カメラ";
+      $("hint").textContent = "LEDを見つけました(C=クロック、D=データ)。違っていたらタップで直せます。"; }
+  }, 1000);
+}
+
+function stopAll() {
+  clearInterval(demoTimer); demoTimer = null;
+  clearInterval(camFindTimer); camFindTimer = null;
+  if (fileJob) fileJob.cancelled = true;
+  fileInfo = null; analyzing = false;
+  vid.pause(); vid.onerror = null;
+  if (stream) { stream.getTracks().forEach((tr) => tr.stop()); stream = null; }
+  $("err").hidden = true; fpsTimes = [];
+}
+function showErr(s) { $("err").textContent = s; $("err").hidden = false; }
+function setSourceUI() {
+  $("srcDemo").setAttribute("aria-pressed", source === "demo");
+  $("srcCam").setAttribute("aria-pressed", source === "camera");
+  $("demoCtl").hidden = source !== "demo";
+  $("videoCtl").hidden = source !== "video";
+  $("trackWrap").hidden = source !== "camera";
+  if (source === "demo") $("badge").textContent = "デモ信号(実機ではありません)";
+}
+function setPickUI() {
+  $("pickClk").setAttribute("aria-pressed", picking === "clk");
+  $("pickDat").setAttribute("aria-pressed", picking === "dat");
+  $("hint").textContent = picking === "clk" ? "映像の上をタップして、クロックLED(D1)の位置を指定します。" : "映像の上をタップして、データLED(D3)の位置を指定します。";
+}
+
+// ---------- LEDの位置指定 ----------
+view.addEventListener("click", (e) => {
+  const rc = view.getBoundingClientRect();
+  markers[picking] = { x: (e.clientX - rc.left) / rc.width, y: (e.clientY - rc.top) / rc.height };
+  picking = picking === "clk" ? "dat" : "clk"; setPickUI();
+  if (!analyzing) resetDecoder();
+  if (fileInfo && !analyzing) drawView(still);
+});
+$("pickClk").onclick = () => { picking = "clk"; setPickUI(); };
+$("pickDat").onclick = () => { picking = "dat"; setPickUI(); };
+$("autoFind").onclick = () => {
+  const found = findLeds(fileInfo ? smallAll : ring);
+  if (!found) { showErr("点滅しているLEDを2つ見つけられませんでした。数秒待つか、手動でタップして指定してください。"); return; }
+  $("err").hidden = true; markers = found; resetDecoder();
+  if (fileInfo && !analyzing) drawView(still);
+  $("hint").textContent = "点滅の多いほうをクロック(C)にしました。逆なら指定し直してください。";
+};
+
+// ---------- 表示の更新 ----------
+function renderMsg() {
+  const el = $("msg");
+  if (lastMsg === null) { el.textContent = "受信待ち…"; el.classList.add("wait"); }
+  else { el.textContent = lastMsg; el.classList.remove("wait"); }
+}
+function hex(a) { return a.map((b) => b.toString(16).toUpperCase().padStart(2, "0")).join(" "); }
+function renderLog() {
+  const ul = $("log"); ul.textContent = "";
+  if (!frames.length) { const li = document.createElement("li"); li.className = "empty"; li.style.cssText = "display:block;border:0"; li.textContent = "まだありません"; ul.append(li); renderMsg(); return; }
+  for (const f of frames) {
+    const li = document.createElement("li");
+    const t = document.createElement("span"); t.textContent = f.t.toFixed(1) + "s";
+    const s = document.createElement("span"); s.className = f.ok ? "ok" : "ng"; s.textContent = f.ok ? "成功" : "失敗";
+    const body = document.createElement("span"); body.textContent = JSON.stringify(f.text);
+    const hx = document.createElement("span"); hx.className = "hex"; hx.textContent = hex(f.bytes); body.append(hx);
+    li.append(t, s, body); ul.append(li);
+  }
+  renderMsg();
+}
+function renderStats() {
+  $("stFrames").textContent = dec.ok + " / " + dec.ng;
+  const bps = estimateBps(dec);
+  $("stBps").textContent = bps ? bps.toFixed(1) + " bps" : "–";
+  let fps = fileInfo ? fileInfo.fps : null;
+  if (!fps && fpsTimes.length > 5) fps = (fpsTimes.length - 1) / (fpsTimes[fpsTimes.length - 1] - fpsTimes[0]);
+  $("stFps").textContent = fps ? fps.toFixed(0) + " fps" : "–";
+  $("bits").textContent = dec.recent || "—";
+  const v = $("verdict");
+  if (!markers.clk || !markers.dat) { v.className = "verdict"; v.textContent = "LEDの位置を指定すると判定を始めます。"; return; }
+  if (!scopeBuf.length) { v.className = "verdict"; v.textContent = "解析を待っています。"; return; }
+  if (!dec.clk.valid) { v.className = "verdict bad"; v.textContent = "クロックLEDの点滅が見えません。位置か読み取る範囲を調整してください。"; return; }
+  if (bps && fps) {
+    const per = fps / bps;
+    if (per < 3) { v.className = "verdict bad"; v.textContent = `1ビットあたり約${per.toFixed(1)}コマ。速すぎて取りこぼす可能性があります。`; return; }
+    v.className = "verdict good"; v.textContent = `1ビットあたり約${per.toFixed(1)}コマ。カメラが追いつける速さです。`; return;
+  }
+  v.className = "verdict"; v.textContent = "ビットを集めています…";
+}
+function drawScope() {
+  const cv = $("scope"), dpr = window.devicePixelRatio || 1;
+  const W = cv.clientWidth, H = 170;
+  if (cv.width !== Math.round(W * dpr)) { cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr); }
+  const g = cv.getContext("2d"); g.setTransform(dpr, 0, 0, dpr, 0, 0); g.clearRect(0, 0, W, H);
+  const line = css("--line"), muted = css("--muted");
+  g.strokeStyle = line; g.lineWidth = 1;
+  for (let i = 0; i <= 6; i++) { const x = W * i / 6; g.beginPath(); g.moveTo(x, 0); g.lineTo(x, H); g.stroke(); }
+  if (scopeBuf.length < 2) return;
+  const tEnd = scopeBuf[scopeBuf.length - 1].t, tStart = tEnd - 6, X = (t) => (t - tStart) / 6 * W;
+  const lanes = [{ k: "cv", ch: dec.clk, col: css("--clk"), y0: 10, h: 60 }, { k: "dv", ch: dec.dat, col: css("--led"), y0: 85, h: 60 }];
+  for (const L of lanes) {
+    const lo = L.ch.lo ?? 0, hi = L.ch.hi ?? 1, rg = Math.max(1, hi - lo);
+    const Y = (v) => L.y0 + L.h - Math.max(0, Math.min(1, (v - lo) / rg)) * L.h;
+    g.setLineDash([4, 4]); g.strokeStyle = muted; g.beginPath(); g.moveTo(0, Y((hi + lo) / 2)); g.lineTo(W, Y((hi + lo) / 2)); g.stroke(); g.setLineDash([]);
+    g.strokeStyle = L.col; g.lineWidth = 1.8; g.beginPath();
+    scopeBuf.forEach((s, i) => { const x = X(s.t), y = Y(s[L.k]); i ? g.lineTo(x, y) : g.moveTo(x, y); }); g.stroke();
+  }
+  g.font = "11px IBM Plex Mono, monospace"; g.fillStyle = css("--ink");
+  for (const s of scopeBuf) if (s.bit !== null) {
+    const x = X(s.t); g.strokeStyle = muted; g.beginPath(); g.moveTo(x, 8); g.lineTo(x, 148); g.stroke();
+    g.fillText(String(s.bit), x - 3, 164);
+  }
+}
+let uiLast = 0;
+function uiLoop(now) {
+  if (now - uiLast > 100) { uiLast = now; renderStats(); drawScope(); }
+  requestAnimationFrame(uiLoop);
+}
+
+// ---------- ボタン ----------
+$("srcDemo").onclick = startDemo;
+$("srcCam").onclick = startCamera;
+$("fileIn").onchange = (e) => { const f = e.target.files[0]; e.target.value = ""; if (f) startVideoFile(f); };
+$("replay").onclick = () => {
+  if (fileInfo) { analyzeFile(); return; }
+  resetDecoder(); vid.currentTime = 0; playVideo();
+};
+$("speed").onchange = () => { vid.playbackRate = +$("speed").value; };
+$("resetDec").onclick = resetDecoder;
+
+resetDecoder(); setPickUI(); startDemo(); requestAnimationFrame(uiLoop);
+</script>
