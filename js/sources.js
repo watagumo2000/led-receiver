@@ -232,3 +232,5 @@ function setMode(m) {
   resetDecoder();
   if (fileInfo && !analyzing) { const f = findLeds(smallAll); if (f) pts = f; drawView(still); }
 }
+
+(window.LOADED = window.LOADED || {})["sources.js"] = "20261106-1130";   // 版の確認用(index.html の最後で確かめる)

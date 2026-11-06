@@ -203,3 +203,5 @@ function addVote(dec, len, buf, sum) {
   let x = best.L; for (const b of data) x ^= b;
   dec.voted = { n: best.w.n, ok: x === pick[best.L], text: String.fromCharCode(...data) };
 }
+
+(window.LOADED = window.LOADED || {})["decode-parallel.js"] = "20261106-1130";   // 版の確認用(index.html の最後で確かめる)

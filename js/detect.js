@@ -128,3 +128,5 @@ function findParallel(list, sw, sh) {
   return lineOf({ x: (a.x + 0.5) / sw, y: (a.y + 0.5) / sh }, { x: (b.x + 0.5) / sw, y: (b.y + 0.5) / sh });
 }
 function lineOf(a, b) { return Array.from({ length: 10 }, (_, k) => ({ x: a.x + (b.x - a.x) * k / 9, y: a.y + (b.y - a.y) * k / 9 })); }
+
+(window.LOADED = window.LOADED || {})["detect.js"] = "20261106-1130";   // 版の確認用(index.html の最後で確かめる)

@@ -142,3 +142,5 @@ function stopLog() {
 }
 $("logBtn").onclick = () => (logRows ? stopLog() : startLog());
 $("diagOn").onchange = () => { if (!$("diagOn").checked) { $("diagTable").textContent = ""; $("diagSum").textContent = "表示を止めています。"; } };
+
+(window.LOADED = window.LOADED || {})["diag.js"] = "20261106-1130";   // 版の確認用(index.html の最後で確かめる)

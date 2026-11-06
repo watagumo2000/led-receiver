@@ -118,3 +118,4 @@ label.inline { font-size: .85rem; color: var(--muted); display: inline-flex; gap
 .chip.o { background: var(--led); color: var(--stage); border-color: var(--led); }
 .diag-table .bad { color: var(--ng); }
 .diag-table .hot { color: var(--ng); font-weight: 600; }
+.ver { font-family: var(--mono); font-size: .75rem; margin-left: 6px; padding: 1px 6px; border: 1px solid var(--line); border-radius: 4px; white-space: nowrap; }

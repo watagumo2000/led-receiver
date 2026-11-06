@@ -65,3 +65,5 @@ function pushColorSym(dec, r, g) {
   }
   return { t, b1, b2, fixed: fr.fixed || fg.fixed };
 }
+
+(window.LOADED = window.LOADED || {})["decode-color.js"] = "20261106-1130";   // 版の確認用(index.html の最後で確かめる)

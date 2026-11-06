@@ -66,3 +66,5 @@ function txColorState(t, rate, syms) {
 }
 // k番目のLED(0=D1 … 9=D10)の [赤が点いているか, 緑が点いているか]。D1 はクロックで両方
 function ledColor(st, k) { return k === 0 ? [st.c, st.c] : [(st.r >> (9 - k)) & 1, (st.g >> (9 - k)) & 1]; }
+
+(window.LOADED = window.LOADED || {})["tx-model.js"] = "20261106-1130";   // 版の確認用(index.html の最後で確かめる)

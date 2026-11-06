@@ -25,3 +25,5 @@ function medianRate(ts) {
   const m = d[Math.floor(d.length / 2)];
   return m > 0 ? 1 / m : null;
 }
+
+(window.LOADED = window.LOADED || {})["channel.js"] = "20261106-1130";   // 版の確認用(index.html の最後で確かめる)

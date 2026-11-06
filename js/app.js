@@ -181,3 +181,5 @@ $("resetDec").onclick = resetDecoder;
 $("precise").onchange = () => { resetDecoder(); if (fileInfo && !analyzing) analyzeFile(); };
 
 setModeUI(); resetDecoder(); startDemo(); requestAnimationFrame(uiLoop);
+
+(window.LOADED = window.LOADED || {})["app.js"] = "20261106-1130";   // 版の確認用(index.html の最後で確かめる)

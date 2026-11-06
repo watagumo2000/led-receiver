@@ -31,3 +31,5 @@ function trackStep(img, pts, tr, r) {
   const dx = (sx / sw - cx) * 0.5 / W, dy = (sy / sw - cy) * 0.5 / H;
   return pts.map((p) => ({ x: p.x + dx, y: p.y + dy }));
 }
+
+(window.LOADED = window.LOADED || {})["tracking.js"] = "20261106-1130";   // 版の確認用(index.html の最後で確かめる)
