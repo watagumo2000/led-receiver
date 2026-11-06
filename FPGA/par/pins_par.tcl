@@ -1,10 +1,12 @@
-# optical_par のピン割り当て(前期資料 図9 より)
+# optical_par2 のピン割り当て(前期資料 図9 より)
 # 使い方: プロジェクトを開いた状態で [View] → [Utility Windows] → [Tcl Console] を開き、
-#         source c:/intelFPGA_lite/D3/optical_par/pins_par.tcl  のように実行する
+#         source c:/intelFPGA_lite/D3/optical_par2/pins_par2.tcl  のように実行する
 
 set_location_assignment PIN_P22  -to clk
 set_location_assignment PIN_AB13 -to resetn
-set_location_assignment PIN_AB12 -to sw_in
+set_location_assignment PIN_AB12 -to sw_rate
+set_location_assignment PIN_AF13 -to sw_msg
+set_location_assignment PIN_AG12 -to sw_mode
 
 # D1 : クロック
 set_location_assignment PIN_AF21 -to {led_d1[0]}
@@ -66,8 +68,8 @@ set_location_assignment PIN_AG23 -to {led_d10[1]}
 set_location_assignment PIN_AA15 -to {led_d10[2]}
 set_location_assignment PIN_AH22 -to {led_d10[3]}
 
-# 基板の緑LED0〜3 : 速度表示
-set_location_assignment PIN_AK3 -to {led_rate[0]}
-set_location_assignment PIN_AJ4 -to {led_rate[1]}
-set_location_assignment PIN_AJ5 -to {led_rate[2]}
-set_location_assignment PIN_AK6 -to {led_rate[3]}
+# 基板の緑LED0〜3 : 速度(LED1,0)とメッセージ番号(LED3,2)
+set_location_assignment PIN_AK3 -to {led_stat[0]}
+set_location_assignment PIN_AJ4 -to {led_stat[1]}
+set_location_assignment PIN_AJ5 -to {led_stat[2]}
+set_location_assignment PIN_AK6 -to {led_stat[3]}
