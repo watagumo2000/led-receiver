@@ -60,7 +60,7 @@ function makeParDecoder2(onFrame) {
   return { ch: Array.from({ length: 10 }, makeChannel), hist: [], prevC: null, prevV: null, prevT: null,
     boot: [], edges: [], T: null, phi: null, locked: false, nextN: null, outl: 0,
     mode: "hunt", len: 0, buf: [], perr: 0, symTimes: [], totalSyms: 0, parityErr: 0, fixed: 0, ok: 0, ng: 0,
-    partial: "", recent: [], votes: new Map(), voted: null, onFrame };
+    partial: "", recent: [], votes: new Map(), voted: null, fixedAt: new Array(9).fill(0), onFrame };
 }
 function resetTiming(dec) { dec.boot = []; dec.edges = []; dec.T = null; dec.phi = null; dec.locked = false; dec.nextN = null; dec.outl = 0; }
 function fitTiming(dec) {
@@ -124,7 +124,10 @@ function feedPar2(dec, t, vals) {
       if (dec.lastC !== undefined && c < dec.lastC + 0.5 * dec.T) continue;   // 読み直し防止
       dec.lastC = c;
       const s = sampleSymbol(dec, c);
-      if (s) { pushSym2(dec, s.sym, c, s.conf); out.push({ t: c, sym: dec.recent[dec.recent.length - 1], fixed: !!dec.lastFixed && dec.recent[dec.recent.length - 1] !== SYNC_SYM }); }
+      if (!s) continue;
+      if (dec.pushFn) { dec.pushFn(s.sym, c, s.conf); continue; }   // カラーモード:組み立ては decode-color.js が行う
+      pushSym2(dec, s.sym, c, s.conf);
+      out.push({ t: c, sym: dec.recent[dec.recent.length - 1], fixed: !!dec.lastFixed && dec.recent[dec.recent.length - 1] !== SYNC_SYM });
     }
   }
   return { states: st, syms: out };
@@ -164,6 +167,7 @@ function pushSym2(dec, s, t, conf) {
     dec.parityErr++; dec.perr++;
     let k = 0; for (let i = 1; i < 9; i++) if (conf[i] < conf[k]) k = i;
     s ^= 1 << (8 - k); dec.fixed++; dec.lastFixed = true;
+    dec.fixedAt[k]++;   // どのLED(k=0 が D2 … 8 が D10)を直したか。診断表示で使う
   } else dec.lastFixed = false;
   dec.recent.push(s); if (dec.recent.length > 24) dec.recent.shift();
   const b = s >> 1;

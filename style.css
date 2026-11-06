@@ -2,17 +2,17 @@
 /* Layout: 計測器のパネル。左に映像(ステージ)、右に受信結果、下に波形スコープ */
 :root {
   --bg: #eef1f4; --surface: #f9fbfc; --ink: #16202b; --muted: #586675; --line: #cdd5dd;
-  --led: #d9680a; --clk: #2a66c9; --par: #7a4fc0; --ok: #1d8449; --ng: #c0392b; --stage: #0c1015; --stage-ink: #e9eef3;
+  --led: #d9680a; --clk: #2a66c9; --par: #7a4fc0; --red: #cc3333; --grn: #2c9a50; --ok: #1d8449; --ng: #c0392b; --stage: #0c1015; --stage-ink: #e9eef3;
   --display: "Zen Kaku Gothic New", "Hiragino Sans", "Yu Gothic", sans-serif;
   --body: "IBM Plex Sans JP", "Hiragino Sans", "Yu Gothic", sans-serif;
   --mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
 }
 @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
   --bg: #11161c; --surface: #19212a; --ink: #e5eaf0; --muted: #93a0ae; --line: #2b3540;
-  --led: #ff9a3c; --clk: #6fa2ff; --par: #b994ff; --ok: #4cc27d; --ng: #ff6b5e; color-scheme: dark } }
+  --led: #ff9a3c; --clk: #6fa2ff; --par: #b994ff; --red: #ff6f6f; --grn: #5fd38a; --ok: #4cc27d; --ng: #ff6b5e; color-scheme: dark } }
 :root[data-theme="dark"] {
   --bg: #11161c; --surface: #19212a; --ink: #e5eaf0; --muted: #93a0ae; --line: #2b3540;
-  --led: #ff9a3c; --clk: #6fa2ff; --par: #b994ff; --ok: #4cc27d; --ng: #ff6b5e; color-scheme: dark }
+  --led: #ff9a3c; --clk: #6fa2ff; --par: #b994ff; --red: #ff6f6f; --grn: #5fd38a; --ok: #4cc27d; --ng: #ff6b5e; color-scheme: dark }
 
 * { box-sizing: border-box; }
 [hidden] { display: none !important; }
@@ -99,3 +99,22 @@ label.inline { font-size: .85rem; color: var(--muted); display: inline-flex; gap
 #camCtl .label { align-self: center; }
 .expval { font-family: var(--mono); font-size: .8rem; color: var(--muted); font-variant-numeric: tabular-nums; }
 .inline-hint { margin: 0; flex: 1 1 260px; min-width: 0; }
+.sw.red { background: var(--red); } .sw.grn { background: var(--grn); }
+.diag-head { display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: center; justify-content: space-between; }
+.diag-head h2 { margin: 0; }
+.diag-tools { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.diag-tools label { font-size: .85rem; color: var(--muted); display: inline-flex; gap: 6px; align-items: center; }
+.diag-sum { font-size: .9rem; margin: 10px 0; line-height: 1.6; }
+.diag-sum b { font-family: var(--mono); font-weight: 500; }
+.diag-sum .warn { color: var(--ng); }
+.diag-wrap { overflow-x: auto; }
+.diag-table { border-collapse: collapse; font-family: var(--mono); font-size: .78rem; font-variant-numeric: tabular-nums; min-width: 640px; width: 100%; }
+.diag-table th, .diag-table td { border-bottom: 1px solid var(--line); padding: 5px 6px; text-align: center; white-space: nowrap; }
+.diag-table th:first-child, .diag-table td:first-child { text-align: left; color: var(--muted); font-family: var(--body); }
+.chip { display: inline-block; min-width: 2.2em; padding: 1px 4px; border-radius: 4px; border: 1px solid var(--line); color: var(--ink); }
+.chip.on { background: var(--led); color: var(--stage); border-color: var(--led); }
+.chip.r { background: var(--red); color: #fff; border-color: var(--red); }
+.chip.g { background: var(--grn); color: #fff; border-color: var(--grn); }
+.chip.o { background: var(--led); color: var(--stage); border-color: var(--led); }
+.diag-table .bad { color: var(--ng); }
+.diag-table .hot { color: var(--ng); font-weight: 600; }

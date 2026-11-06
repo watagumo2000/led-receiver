@@ -20,6 +20,7 @@
         <button id="srcCam" aria-pressed="false">カメラ</button>
         <span class="modes" role="group" aria-label="送信方式">
           <button id="modePar" aria-pressed="true">並列(LED10個)</button>
+          <button id="modeCol" aria-pressed="false">カラー(赤と緑)</button>
           <button id="modeSer" aria-pressed="false">直列(LED2個)</button>
         </span>
       </div>
@@ -93,6 +94,20 @@
     <canvas id="scope" height="190"></canvas>
   </section>
 
+  <section class="panel" aria-label="診断">
+    <div class="diag-head">
+      <h2>診断:どこが読めていないか</h2>
+      <div class="diag-tools">
+        <label><input id="diagOn" type="checkbox" checked>表示する</label>
+        <button id="logBtn">ログを記録</button>
+        <span id="logInfo" class="expval"></span>
+      </div>
+    </div>
+    <p class="diag-sum" id="diagSum">LEDの位置が決まると表示します。</p>
+    <div class="diag-wrap"><table class="diag-table" id="diagTable"></table></div>
+    <p class="hint">「点滅が見えるか」が×のLEDは、明暗の差が小さすぎて点灯/消灯を判定できていません(位置のずれ・遠すぎ・白飛び)。「訂正回数」が多いLEDは、読み間違いが多いLEDです。「ログを記録」は、測った値をコマごとにCSVファイルに保存します(GitHub Pagesなど通常のページで開いたとき)。</p>
+  </section>
+
   <section class="panel tips">
     <div>
       <h2>実機での試し方(並列)</h2>
@@ -119,10 +134,12 @@
 <script src="js/channel.js"></script>
 <script src="js/decode-serial.js"></script>
 <script src="js/decode-parallel.js"></script>
+<script src="js/decode-color.js"></script>
 <script src="js/tracking.js"></script>
 <script src="js/detect.js"></script>
 <script src="js/demux.js"></script>
 <script src="js/view.js"></script>
 <script src="js/sources.js"></script>
 <script src="js/exposure.js"></script>
+<script src="js/diag.js"></script>
 <script src="js/app.js"></script>

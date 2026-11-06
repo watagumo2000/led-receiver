@@ -4,6 +4,7 @@ FPGA(Cyclone V E 開発キット)の拡張ボードのLEDが送る光の点滅�
 
 - 直列方式(`optical_tx`):D1=クロック、D3=データ1ビット
 - 並列方式(`optical_par`):D1=クロック、D2〜D9=1バイト、D10=パリティ
+- カラーモード(`optical_par2` のPB3):D2〜D9の赤=1バイト目、緑=2バイト目、D10=それぞれのパリティ
 
 ## 使い方
 
@@ -22,11 +23,14 @@ FPGA(Cyclone V E 開発キット)の拡張ボードのLEDが送る光の点滅�
 | `js/channel.js` | 明るさ → 0/1 の判定 |
 | `js/decode-serial.js` | 直列方式の復号 |
 | `js/decode-parallel.js` | 並列方式の復号(旧方式と高精度受信) |
+| `js/decode-color.js` | カラーモードの復号(赤と緑を別々に読み、2バイトずつ組み立てる) |
 | `js/tracking.js` | 手ブレ補正 |
 | `js/detect.js` | LEDの場所の自動検出 |
 | `js/demux.js` | MP4 / MOV の読み取り |
 | `js/view.js` | 映像の取り込み・描画・デモ信号 |
 | `js/sources.js` | 動画ファイルとカメラ |
+| `js/exposure.js` | カメラの露出の調整と、白飛びの割合の表示 |
+| `js/diag.js` | 診断表示(LEDごとの判定・明暗の差・訂正回数)とログのCSV保存 |
 | `js/app.js` | 操作と表示の更新 |
 
 ## 高精度受信のしくみ(decode-parallel.js)

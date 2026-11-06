@@ -170,7 +170,7 @@ async function startCamera() {
     if (source !== "camera") return;
     if (ready()) { $("badge").textContent = "カメラ"; return; }
     if (pts.some(Boolean)) return;   // 手で指定している途中
-    if (ring.length < (mode === "par" ? 150 : 60)) return;   // 点滅の少ないLEDも映るよう、数秒分たまるまで待つ
+    if (ring.length < (ten() ? 150 : 60)) return;   // 点滅の少ないLEDも映るよう、数秒分たまるまで待つ
     const found = findLeds(ring);
     if (found) { pts = found; resetDecoder(); $("badge").textContent = "カメラ";
       $("hint").textContent = "LEDを見つけました。番号がずれていたら、D1とD10をタップし直してください。"; }
@@ -199,13 +199,16 @@ function setSourceUI() {
 function setModeUI() {
   $("modePar").setAttribute("aria-pressed", mode === "par");
   $("modeSer").setAttribute("aria-pressed", mode === "ser");
-  $("parPick").hidden = mode !== "par";
-  $("serPick").hidden = mode !== "ser";
-  $("stPerrWrap").hidden = mode !== "par";
+  $("modeCol").setAttribute("aria-pressed", mode === "col");
+  $("parPick").hidden = !ten();
+  $("serPick").hidden = ten();
+  $("stPerrWrap").hidden = !ten();
   $("preciseWrap").hidden = mode !== "par";
-  $("bitsTitle").textContent = mode === "par" ? "受け取ったシンボル(新しい順に右へ)" : "受け取ったビット(新しい順に右へ)";
+  $("bitsTitle").textContent = mode === "col" ? "受け取ったシンボル(赤と緑の2バイト。*=パリティで訂正)" : ten() ? "受け取ったシンボル(新しい順に右へ)" : "受け取ったビット(新しい順に右へ)";
   const lg = $("legend");
-  lg.innerHTML = mode === "par"
+  lg.innerHTML = mode === "col"
+    ? '<span><span class="sw red"></span> 赤が点灯</span><span><span class="sw grn"></span> 緑が点灯</span><span>各LEDの上半分=赤、下半分=緑。下の文字:各シンボルで読んだ2文字(S=フレームの始まり)</span>'
+    : mode === "par"
     ? '<span><span class="sw clk"></span> D1 クロック</span><span><span class="sw dat"></span> D2〜D9 データ</span><span><span class="sw par"></span> D10 パリティ</span><span>下の文字:各シンボルで読んだ内容(S=フレームの始まり、赤=パリティ誤り、紫=パリティで訂正)</span>'
     : '<span><span class="sw clk"></span> クロックLEDの明るさ</span><span><span class="sw dat"></span> データLEDの明るさ</span><span>縦線と数字:クロックが切り替わった瞬間に読んだビット</span>';
   fillDemoRates();

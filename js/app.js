@@ -67,13 +67,21 @@ function symLabel(s) {
 }
 function renderStats() {
   $("stFrames").textContent = dec.ok + " / " + dec.ng;
-  const rate = mode === "par" ? (precise() ? (dec.locked ? 1 / dec.T : null) : medianRate(dec.symTimes)) : estimateBps(dec);
-  $("stBps").textContent = !rate ? "–" : mode === "par" ? `${rate.toFixed(1)}回/秒・${(rate * 8).toFixed(0)}bps` : `${rate.toFixed(1)} bps`;
+  const tm = timing();
+  const rate = ten() ? (precise() ? (tm.locked ? 1 / tm.T : null) : medianRate(dec.symTimes)) : estimateBps(dec);
+  $("stBps").textContent = !rate ? "–" : ten() ? `${rate.toFixed(1)}回/秒・${(rate * (mode === "col" ? 16 : 8)).toFixed(0)}bps` : `${rate.toFixed(1)} bps`;
   let fps = fileInfo ? fileInfo.fps : null;
   if (!fps && fpsTimes.length > 5) fps = (fpsTimes.length - 1) / (fpsTimes[fpsTimes.length - 1] - fpsTimes[0]);
   $("stFps").textContent = fps ? fps.toFixed(0) + " fps" : "–";
   const part = $("partial");
-  if (mode === "par") {
+  if (mode === "col") {
+    $("stPerr").textContent = `${dec.parityErr}(訂正${dec.fixed})`;
+    renderMsg();
+    $("bits").textContent = dec.recent.length ? dec.recent.map((s) => s.sync ? "[S]" : hex([s.b1, s.b2]).replace(" ", "") + (s.fixed ? "*" : "")).join(" ") : "—";
+    const receiving = dec.mode === "data";
+    part.hidden = !receiving;
+    part.textContent = receiving ? "受信中:" + dec.partial + "▍" : "";
+  } else if (mode === "par") {
     $("stPerr").textContent = precise() ? `${dec.parityErr}(訂正${dec.fixed})` : dec.parityErr;
     renderMsg();
     $("bits").textContent = dec.recent.length ? dec.recent.map((s) => {
@@ -89,11 +97,11 @@ function renderStats() {
   const v = $("verdict");
   if (!ready()) { v.className = "verdict"; v.textContent = "LEDの位置を指定すると判定を始めます。"; return; }
   if (!scopeBuf.length) { v.className = "verdict"; v.textContent = "解析を待っています。"; return; }
-  const clkOk = mode === "par" ? dec.ch[0].valid : dec.clk.valid;
-  if (clkOk && precise() && !dec.locked) { v.className = "verdict"; v.textContent = "クロックのリズム(周期と位相)を推定しています…"; return; }
+  const clkOk = ten() ? tm.ch[0].valid : dec.clk.valid;
+  if (clkOk && precise() && !tm.locked) { v.className = "verdict"; v.textContent = "クロックのリズム(周期と位相)を推定しています…"; return; }
   if (!clkOk) { v.className = "verdict bad"; v.textContent = "クロックLED(D1)の点滅が見えません。位置か読み取る範囲を調整してください。"; return; }
   if (rate && fps) {
-    const per = fps / rate, unit = mode === "par" ? "1シンボル" : "1ビット";
+    const per = fps / rate, unit = ten() ? "1シンボル" : "1ビット";
     if (precise() && per >= 2 && per < 3) { v.className = "verdict good"; v.textContent = `${unit}あたり約${per.toFixed(1)}コマ。高精度受信なら読める速さです(余裕は少なめ)。`; return; }
     if (per < (precise() ? 2 : 3)) { v.className = "verdict bad"; v.textContent = `${unit}あたり約${per.toFixed(1)}コマ。速すぎて取りこぼす可能性があります。`; return; }
     v.className = "verdict good"; v.textContent = `${unit}あたり約${per.toFixed(1)}コマ。カメラが追いつける速さです。`; return;
@@ -106,29 +114,34 @@ function drawScope() {
   if (cv.width !== Math.round(W * dpr)) { cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr); }
   const g = cv.getContext("2d"); g.setTransform(dpr, 0, 0, dpr, 0, 0); g.clearRect(0, 0, W, H);
   const line = css("--line"), muted = css("--muted");
-  const L0 = mode === "par" ? 34 : 0, PW = W - L0;
+  const L0 = ten() ? 34 : 0, PW = W - L0;
   g.strokeStyle = line; g.lineWidth = 1;
   for (let i = 0; i <= 6; i++) { const x = L0 + PW * i / 6; g.beginPath(); g.moveTo(x, 0); g.lineTo(x, H); g.stroke(); }
   g.font = "11px IBM Plex Mono, monospace";
-  if (mode === "par") for (let i = 0; i < 10; i++) { g.fillStyle = muted; g.fillText("D" + (i + 1), 0, 8 + i * 15 + 11); }
+  if (ten()) for (let i = 0; i < 10; i++) { g.fillStyle = muted; g.fillText("D" + (i + 1), 0, 8 + i * 15 + 11); }
   if (scopeBuf.length < 2) return;
   const tEnd = scopeBuf[scopeBuf.length - 1].t, tStart = tEnd - 6, X = (t) => L0 + (t - tStart) / 6 * PW;
-  if (mode === "par") {
-    // ロジックアナライザのように、10個のLEDの点灯を並べる
+  if (ten()) {
+    // ロジックアナライザのように、10個のLEDの点灯を並べる(カラーモードは上半分=赤、下半分=緑)
+    const red = css("--red"), grn = css("--grn");
     for (let i = 0; i < 10; i++) {
-      g.fillStyle = markerStyle(i).col;
       const y = 8 + i * 15;
       for (let k = 0; k < scopeBuf.length - 1; k++) {
-        if (scopeBuf[k].st[i] !== 1) continue;
-        const x0 = X(scopeBuf[k].t), x1 = X(scopeBuf[k + 1].t);
-        g.fillRect(x0, y + 2, Math.max(1, x1 - x0), 10);
+        const x0 = X(scopeBuf[k].t), x1 = X(scopeBuf[k + 1].t), w = Math.max(1, x1 - x0);
+        if (scopeBuf[k].col) {
+          const [a, b] = scopeBuf[k].col[i];
+          if (a) { g.fillStyle = red; g.fillRect(x0, y + 2, w, 5); }
+          if (b) { g.fillStyle = grn; g.fillRect(x0, y + 7, w, 5); }
+        } else if (scopeBuf[k].st[i] === 1) {
+          g.fillStyle = markerStyle(i).col; g.fillRect(x0, y + 2, w, 10);
+        }
       }
     }
     for (const s of scopeSyms) {
       if (s.t < tStart) continue;
       const x = X(s.t); g.strokeStyle = muted; g.beginPath(); g.moveTo(x, 6); g.lineTo(x, 160); g.stroke();
       g.fillStyle = s.bad ? css("--ng") : s.fixed ? css("--par") : css("--ink");
-      const lb = symLabel(s.sym); g.fillText(lb, x - g.measureText(lb).width / 2, 180);
+      const lb = s.label !== undefined ? s.label : symLabel(s.sym); g.fillText(lb, x - g.measureText(lb).width / 2, 180);
     }
     return;
   }
@@ -148,7 +161,7 @@ function drawScope() {
 }
 let uiLast = 0;
 function uiLoop(now) {
-  if (now - uiLast > 100) { uiLast = now; renderStats(); drawScope(); }
+  if (now - uiLast > 100) { uiLast = now; renderStats(); drawScope(); renderDiag(); }
   requestAnimationFrame(uiLoop);
 }
 
@@ -157,6 +170,7 @@ $("srcDemo").onclick = startDemo;
 $("srcCam").onclick = startCamera;
 $("modePar").onclick = () => setMode("par");
 $("modeSer").onclick = () => setMode("ser");
+$("modeCol").onclick = () => setMode("col");
 $("fileIn").onchange = (e) => { const f = e.target.files[0]; e.target.value = ""; if (f) startVideoFile(f); };
 $("replay").onclick = () => {
   if (fileInfo) { analyzeFile(); return; }

@@ -18,15 +18,17 @@ const DEMO_SER_MSG = "HI FPGA";
 const DEMO_PAR_MSG = "HELLO! THIS TEXT CAME FROM THE FPGA BY LIGHT.";
 const DEMO_BITS = makeFrameBits(DEMO_SER_MSG);
 const DEMO_SYMS = makeFrameSymbols(DEMO_PAR_MSG);
+const DEMO_CSYMS = makeColorSymbols(DEMO_PAR_MSG);
 const DEMO_COL = Array.from({ length: 10 }, (_, k) => ({ x: 0.5, y: 0.1 + k * 0.09 }));   // 拡張ボードと同じ縦1列
-const RATES = { par: [2, 5, 8, 10], ser: [5, 10, 15, 20] };
+const RATES = { par: [2, 5, 8, 10], col: [2, 5, 8, 10], ser: [5, 10, 15, 20] };
 
-let mode = "par";                // "par"=並列(10個) / "ser"=直列(2個)
+let mode = "par";                // "par"=並列(10個) / "col"=カラー(10個・赤と緑) / "ser"=直列(2個)
 let source = "demo";
 let pts = [];                    // LEDの位置(0〜1)。並列:[D1…D10]、直列:[クロック, データ]
 let placeStep = 0;               // 並列:0=次のタップはD1、1=次はD10
 let picking = 0;                 // 直列:0=クロック、1=データ
 let dec, scopeBuf = [], scopeSyms = [], frames = [], lastMsg = null, lastStates = [];
+let lastColor = [], lastVals = [], lastRG = [];   // 診断表示用:LEDごとの色の判定と、測った明るさ
 let fpsTimes = [], demoTimer = null, rvfcId = null, stream = null, lastMediaTime = -1;
 let curRot = 0, camFindTimer = null, trk = { peak: 0 };
 let fileJob = null, fileInfo = null, fileObj = null, analyzing = false;
@@ -36,13 +38,17 @@ let ring = [], smallAll = [];
 function resetDecoder() {
   trk = { peak: 0 };
   const onFrame = (f) => { frames.unshift(f); frames = frames.slice(0, 8); if (f.ok) lastMsg = f.text; renderLog(); };
-  dec = mode === "par" ? (precise() ? makeParDecoder2(onFrame) : makeParDecoder(onFrame)) : makeDecoder(onFrame);
+  dec = mode === "col" ? makeColorDecoder(onFrame)
+    : mode === "par" ? (precise() ? makeParDecoder2(onFrame) : makeParDecoder(onFrame)) : makeDecoder(onFrame);
+  lastColor = []; if (typeof diagReset === "function") diagReset();
   scopeBuf = []; scopeSyms = []; frames = []; lastMsg = null; lastStates = []; renderLog(); renderMsg();
 }
-function precise() { return mode === "par" && $("precise").checked; }
-function ready() { return mode === "par" ? pts.length === 10 && pts.every(Boolean) : !!(pts[0] && pts[1]); }
-function demoPositions() { return mode === "par" ? DEMO_COL.map((p) => ({ ...p })) : [{ ...DEMO_COL[0] }, { ...DEMO_COL[2] }]; }
-function findLeds(list) { return mode === "par" ? findParallel(list, SMALL_W, SMALL_H) : findSerial(list, SMALL_W, SMALL_H); }
+function ten() { return mode !== "ser"; }   // LEDを10個使う方式(並列・カラー)
+function precise() { return mode === "col" || (mode === "par" && $("precise").checked); }
+function timing() { return mode === "col" ? dec.subR : dec; }   // クロック再生の状態を持つ受信器
+function ready() { return ten() ? pts.length === 10 && pts.every(Boolean) : !!(pts[0] && pts[1]); }
+function demoPositions() { return ten() ? DEMO_COL.map((p) => ({ ...p })) : [{ ...DEMO_COL[0] }, { ...DEMO_COL[2] }]; }
+function findLeds(list) { return ten() ? findParallel(list, SMALL_W, SMALL_H) : findSerial(list, SMALL_W, SMALL_H); }
 
 // ---------- 映像の大きさと描画(回転を考慮) ----------
 function srcSize(src) {
@@ -78,7 +84,17 @@ function processFrame(src, t) {
   if (ready()) {
     const r = effRadius(img.width, img.height);
     const vals = pts.map((p) => sampleAt(img, p, r));
-    if (mode === "par") {
+    lastVals = vals;
+    if (mode === "col") {
+      const rg = pts.map((p) => sampleRG(img, p, r));
+      lastRG = rg;
+      const res = feedColor(dec, t, vals[0], rg.slice(1).map((x) => x[0]), rg.slice(1).map((x) => x[1]));
+      lastColor = res.states;
+      lastStates = res.states.map(([a, b]) => a | b);
+      scopeBuf.push({ t, st: lastStates, col: res.states });
+      for (const s of res.syms) scopeSyms.push({ t: s.t, label: s.sync ? "S" : byteLabel(s.b1) + byteLabel(s.b2), fixed: s.fixed });
+      while (scopeSyms.length && scopeSyms[0].t < t - 6) scopeSyms.shift();
+    } else if (mode === "par") {
       if (precise()) {
         const res = feedPar2(dec, t, vals);
         lastStates = res.states; scopeBuf.push({ t, st: res.states });
@@ -99,11 +115,24 @@ function processFrame(src, t) {
       if (moved) pts = moved;
     }
     if (source === "camera" && fpsTimes.length % 10 === 0) updateClip(img, pts, r, lastStates);
+    if (typeof diagLog === "function") diagLog(t);
   }
   ring.push(computeSmall(img)); if (ring.length > RING) ring.shift();
   fpsTimes.push(t); if (fpsTimes.length > 31) fpsTimes.shift();
   drawView(src);
 }
+// 読み取り範囲の赤(R)と緑(G)の平均(カラーモード用)
+function sampleRG(img, m, r) {
+  const W = img.width, H = img.height, cx = m.x * W, cy = m.y * H, d = img.data;
+  let sr = 0, sg = 0, n = 0;
+  for (let y = Math.max(0, Math.floor(cy - r)); y <= Math.min(H - 1, Math.ceil(cy + r)); y++)
+    for (let x = Math.max(0, Math.floor(cx - r)); x <= Math.min(W - 1, Math.ceil(cx + r)); x++) {
+      if ((x - cx) ** 2 + (y - cy) ** 2 > r * r) continue;
+      const i = (y * W + x) * 4; sr += d[i]; sg += d[i + 1]; n++;
+    }
+  return n ? [sr / n, sg / n] : [0, 0];
+}
+function byteLabel(b) { return b >= 32 && b < 127 ? String.fromCharCode(b) : "·"; }
 function sampleAt(img, m, r) {
   const W = img.width, H = img.height, cx = m.x * W, cy = m.y * H, d = img.data;
   let s = 0, n = 0;
@@ -153,10 +182,11 @@ function drawDemo(t) {
   dctx.fillStyle = "#1d3b28"; dctx.fillRect(250, 20, 140, 440);
   dctx.fillStyle = "#c9b98a"; dctx.font = "13px monospace";
   // 露光時間ぶんの平均をとる(カメラは一瞬ではなく少しの時間ためて撮る)
-  const exp = 0.6 / fps, sub = 6, lit = new Array(10).fill(0);
+  const exp = 0.6 / fps, sub = 6, lit = new Array(10).fill(0), litR = new Array(10).fill(0), litG = new Array(10).fill(0);
   for (let k = 0; k < sub; k++) {
     const tt = t - exp * k / sub;
-    if (mode === "par") { const s = txParState(tt, rate, DEMO_SYMS); for (let i = 0; i < 10; i++) lit[i] += ledOn(s, i) / sub; }
+    if (mode === "col") { const s = txColorState(tt, rate, DEMO_CSYMS); for (let i = 0; i < 10; i++) { const [a, b] = ledColor(s, i); litR[i] += a / sub; litG[i] += b / sub; lit[i] += Math.max(a, b) / sub; } }
+    else if (mode === "par") { const s = txParState(tt, rate, DEMO_SYMS); for (let i = 0; i < 10; i++) lit[i] += ledOn(s, i) / sub; }
     else { const s = txState(tt, rate, DEMO_BITS); lit[0] += s.c / sub; lit[2] += s.d / sub; }
   }
   DEMO_COL.forEach((p, i) => {
@@ -165,8 +195,17 @@ function drawDemo(t) {
     dctx.fillStyle = "#d8d2c4"; dctx.fillRect(x - 10, y - 7, 20, 14);
     if (a > 0.02) {
       const g = dctx.createRadialGradient(x, y, 2, x, y, 20);
-      g.addColorStop(0, `rgba(255,236,190,${a})`); g.addColorStop(0.4, `rgba(255,150,40,${a * 0.85})`); g.addColorStop(1, "rgba(255,120,20,0)");
+      if (mode === "col") {
+        // 赤だけ・緑だけ・両方(オレンジ)を、実際のLEDに近い色で描く
+        const R = Math.min(255, 250 * litR[i] + 40 * litG[i]), G = Math.min(255, 50 * litR[i] + 220 * litG[i]), B = 40;
+        g.addColorStop(0, `rgba(${R},${G},${B},${a})`); g.addColorStop(0.5, `rgba(${R},${G},${B},${a * 0.8})`); g.addColorStop(1, `rgba(${R},${G},${B},0)`);
+      } else {
+        g.addColorStop(0, `rgba(255,236,190,${a})`); g.addColorStop(0.4, `rgba(255,150,40,${a * 0.85})`); g.addColorStop(1, "rgba(255,120,20,0)");
+      }
+      // 光は足し算(実際のカメラと同じく、点けると明るさが増える)
+      dctx.globalCompositeOperation = "lighter";
       dctx.fillStyle = g; dctx.fillRect(x - 22, y - 22, 44, 44);
+      dctx.globalCompositeOperation = "source-over";
     }
   });
   dctx.fillStyle = "rgba(255,255,255,0.05)";
@@ -175,7 +214,7 @@ function drawDemo(t) {
 function fillDemoRates() {
   const sel = $("demoRate"); sel.textContent = "";
   for (const r of RATES[mode]) { const o = document.createElement("option"); o.textContent = r; sel.append(o); }
-  sel.value = "5"; $("demoUnit").textContent = mode === "par" ? "回/秒" : "bps";
+  sel.value = "5"; $("demoUnit").textContent = ten() ? "回/秒" : "bps";
 }
 function startDemo() {
   stopAll(); source = "demo"; curRot = 0; setSourceUI();
