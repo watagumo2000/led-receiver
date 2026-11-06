@@ -120,4 +120,4 @@ async function demuxMp4(read, size) {
   throw new Error("動画の映像トラックが見つかりませんでした");
 }
 
-(window.LOADED = window.LOADED || {})["demux.js"] = "20261106-1130";   // 版の確認用(index.html の最後で確かめる)
+(window.LOADED = window.LOADED || {})["demux.js"] = "20261106-1200b";   // 版の確認用(index.html の最後で確かめる)

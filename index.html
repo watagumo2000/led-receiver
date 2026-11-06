@@ -4,12 +4,12 @@
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans+JP:wght@400;500;700&family=Zen+Kaku+Gothic+New:wght@700;900&display=swap">
-<link rel="stylesheet" href="style.css?v=20261106-1130">
+<link rel="stylesheet" href="style.css?v=20261106-1200b">
 
 <div class="wrap">
   <header>
     <h1><span class="dot" aria-hidden="true"></span>LED光通信レシーバー</h1>
-    <p class="sub">FPGAのLEDが送る光の点滅を、カメラ映像から文字に戻します <span class="ver" id="ver">版 20261106-1130</span></p>
+    <p class="sub">FPGAのLEDが送る光の点滅を、カメラ映像から文字に戻します <span class="ver" id="ver">版 20261106-1200b</span></p>
   </header>
 
   <div class="main">
@@ -130,19 +130,19 @@
 <video id="vid" muted playsinline hidden></video>
 
 <!-- 読み込む順番が大事:下の app.js が最後に動き始める -->
-<script src="js/tx-model.js?v=20261106-1130"></script>
-<script src="js/channel.js?v=20261106-1130"></script>
-<script src="js/decode-serial.js?v=20261106-1130"></script>
-<script src="js/decode-parallel.js?v=20261106-1130"></script>
-<script src="js/decode-color.js?v=20261106-1130"></script>
-<script src="js/tracking.js?v=20261106-1130"></script>
-<script src="js/detect.js?v=20261106-1130"></script>
-<script src="js/demux.js?v=20261106-1130"></script>
-<script src="js/view.js?v=20261106-1130"></script>
-<script src="js/sources.js?v=20261106-1130"></script>
-<script src="js/exposure.js?v=20261106-1130"></script>
-<script src="js/diag.js?v=20261106-1130"></script>
-<script src="js/app.js?v=20261106-1130"></script>
+<script src="js/tx-model.js?v=20261106-1200b"></script>
+<script src="js/channel.js?v=20261106-1200b"></script>
+<script src="js/decode-serial.js?v=20261106-1200b"></script>
+<script src="js/decode-parallel.js?v=20261106-1200b"></script>
+<script src="js/decode-color.js?v=20261106-1200b"></script>
+<script src="js/tracking.js?v=20261106-1200b"></script>
+<script src="js/detect.js?v=20261106-1200b"></script>
+<script src="js/demux.js?v=20261106-1200b"></script>
+<script src="js/view.js?v=20261106-1200b"></script>
+<script src="js/sources.js?v=20261106-1200b"></script>
+<script src="js/exposure.js?v=20261106-1200b"></script>
+<script src="js/diag.js?v=20261106-1200b"></script>
+<script src="js/app.js?v=20261106-1200b"></script>
 
 <!-- 必要なファイルがそろっているかの確認(古いファイルが残っている・アップロード漏れのとき、画面に出す) -->
 <script>
@@ -151,7 +151,7 @@
     "decode-parallel.js": "makeParDecoder2", "decode-color.js": "makeColorDecoder", "tracking.js": "trackStep",
     "detect.js": "findParallel", "demux.js": "demuxMp4", "view.js": "ten", "sources.js": "startCamera",
     "exposure.js": "setupExposure", "diag.js": "renderDiag", "app.js": "renderStats" };
-  var V = "20261106-1130", miss = [], L = window.LOADED || {};
+  var V = "20261106-1200b", miss = [], L = window.LOADED || {};
   for (var f in need) if (typeof window[need[f]] !== "function" || L[f] !== V) miss.push("js/" + f + (L[f] ? "(古い版 " + L[f] + ")" : ""));
   if (!document.getElementById("modeCol") || miss.length) {
     var e = document.getElementById("err");

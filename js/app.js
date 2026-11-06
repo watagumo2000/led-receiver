@@ -182,4 +182,4 @@ $("precise").onchange = () => { resetDecoder(); if (fileInfo && !analyzing) anal
 
 setModeUI(); resetDecoder(); startDemo(); requestAnimationFrame(uiLoop);
 
-(window.LOADED = window.LOADED || {})["app.js"] = "20261106-1130";   // 版の確認用(index.html の最後で確かめる)
+(window.LOADED = window.LOADED || {})["app.js"] = "20261106-1200b";   // 版の確認用(index.html の最後で確かめる)

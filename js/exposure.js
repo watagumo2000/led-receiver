@@ -129,4 +129,4 @@ function stopExposure() {
   const box = $("camCtl"); if (box) { box.hidden = true; box.textContent = ""; }
 }
 
-(window.LOADED = window.LOADED || {})["exposure.js"] = "20261106-1130";   // 版の確認用(index.html の最後で確かめる)
+(window.LOADED = window.LOADED || {})["exposure.js"] = "20261106-1200b";   // 版の確認用(index.html の最後で確かめる)

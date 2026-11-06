@@ -9,6 +9,11 @@ function makeColorDecoder(onFrame) {
     mode: "hunt", bytes: [], len: 0, perr: 0, ok: 0, ng: 0, parityErr: 0, fixed: 0,
     fixedAtR: new Array(9).fill(0), fixedAtG: new Array(9).fill(0),
     partial: "", recent: [], votes: new Map(), voted: null, onFrame };
+  // 赤は点灯すると白飛びしやすいので、白飛びしているときは境目を点灯側に寄せる(最大値から20%下)
+  dec.subR.satAlpha = 0.2;
+  dec.subG.satAlpha = 0.2;
+  // D2〜D10 の赤と緑は、大津の方法で境目を決める(D1 のクロックは今までどおり)
+  for (let i = 1; i < 10; i++) { dec.subR.ch[i].otsu = true; dec.subG.ch[i].otsu = true; }
   dec.subR.pushFn = (s, c, conf) => dec.qR.push({ s, c, conf });
   dec.subG.pushFn = (s, c, conf) => dec.qG.push({ s, c, conf });
   return dec;
@@ -66,4 +71,4 @@ function pushColorSym(dec, r, g) {
   return { t, b1, b2, fixed: fr.fixed || fg.fixed };
 }
 
-(window.LOADED = window.LOADED || {})["decode-color.js"] = "20261106-1130";   // 版の確認用(index.html の最後で確かめる)
+(window.LOADED = window.LOADED || {})["decode-color.js"] = "20261106-1200b";   // 版の確認用(index.html の最後で確かめる)

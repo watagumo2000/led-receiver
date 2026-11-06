@@ -228,4 +228,4 @@ function startDemo() {
   $("demoRate").onchange = () => resetDecoder();
 }
 
-(window.LOADED = window.LOADED || {})["view.js"] = "20261106-1130";   // 版の確認用(index.html の最後で確かめる)
+(window.LOADED = window.LOADED || {})["view.js"] = "20261106-1200b";   // 版の確認用(index.html の最後で確かめる)

@@ -149,7 +149,15 @@ function sampleSymbol(dec, c) {
   for (let i = 1; i < 10; i++) {
     const ch = dec.ch[i], rg = ch.hi - ch.lo;
     let z = -0.5;
-    if (rg > Math.max(12, 0.4 * cr)) z = (sum[i] / wsum - (ch.hi + ch.lo) / 2) / rg;
+    if (rg > Math.max(12, 0.4 * cr)) {
+      // 境目は明暗の真ん中。ただし点灯側が白飛び(上限近く)しているときは、点灯側に寄せる。
+      // カラーモードで白飛びしていないときは、大津の方法で求めた境目を使う(実際のログで、赤0%・緑2%の誤り)。
+      // 白飛びすると点灯時の値はほぼ一定になる一方、消灯時は隣のLEDのにじみで大きくばらつくため(実際のログで確認)
+      const mid = dec.satAlpha && ch.peak >= 245 ? ch.peak - dec.satAlpha * (ch.peak - ch.lo)
+        : ch.thr !== undefined ? ch.thr           // 大津の方法で求めた境目(カラーモード)
+        : (ch.hi + ch.lo) / 2;
+      z = (sum[i] / wsum - mid) / rg;
+    }
     sym = (sym << 1) | (z > 0 ? 1 : 0);
     conf.push(Math.abs(z));
   }
@@ -204,4 +212,4 @@ function addVote(dec, len, buf, sum) {
   dec.voted = { n: best.w.n, ok: x === pick[best.L], text: String.fromCharCode(...data) };
 }
 
-(window.LOADED = window.LOADED || {})["decode-parallel.js"] = "20261106-1130";   // 版の確認用(index.html の最後で確かめる)
+(window.LOADED = window.LOADED || {})["decode-parallel.js"] = "20261106-1200b";   // 版の確認用(index.html の最後で確かめる)

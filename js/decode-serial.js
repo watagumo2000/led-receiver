@@ -45,4 +45,4 @@ function pushBit(dec, b, t) {
 }
 function estimateBps(dec) { return medianRate(dec.bitTimes); }
 
-(window.LOADED = window.LOADED || {})["decode-serial.js"] = "20261106-1130";   // 版の確認用(index.html の最後で確かめる)
+(window.LOADED = window.LOADED || {})["decode-serial.js"] = "20261106-1200b";   // 版の確認用(index.html の最後で確かめる)

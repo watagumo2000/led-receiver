@@ -32,4 +32,4 @@ function trackStep(img, pts, tr, r) {
   return pts.map((p) => ({ x: p.x + dx, y: p.y + dy }));
 }
 
-(window.LOADED = window.LOADED || {})["tracking.js"] = "20261106-1130";   // 版の確認用(index.html の最後で確かめる)
+(window.LOADED = window.LOADED || {})["tracking.js"] = "20261106-1200b";   // 版の確認用(index.html の最後で確かめる)
