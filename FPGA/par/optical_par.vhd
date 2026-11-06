@@ -27,7 +27,13 @@
 --    PB0 : 速度を切り替え (2 → 5 → 8 → 10 シンボル/秒 → 2 ...)
 --    PB1 : リセット(5シンボル/秒・メッセージ0・通常モードに戻る)
 --    PB2 : メッセージを切り替え (0 → 1 → 2 → 3 → 0 ...)
---    PB3 : 通常モード / カラーモード を切り替え
+--    PB3 : 短く押す → 通常モード / カラーモード を切り替え(離したときに切り替わる)
+--          1秒長押し → LEDの明るさを切り替え 100% → 25% → 6% → 1.6% → 100% ...
+--          (カメラでLEDの中心が白飛びして色が分からなくなるのを防ぐため)
+--
+--  ■ 明るさ(PWM)
+--    50MHzで回る8ビットのカウンタ(1周 約5.1µs = 約195kHz)と比べ、点ける時間の割合を変える。
+--    カメラが1コマを撮る時間(1/1000秒でも)の中に何百回も入るので、映像ではちらつかず暗く写る。
 --
 --  ■ 基板の緑LED(点灯=1 として2進数で表示)
 --    LED1 LED0 : 速度  00=2, 01=5, 10=8, 11=10 シンボル/秒
@@ -145,10 +151,15 @@ architecture rtl of optical_par2 is
   -- 拡張ボードの2色LED(実機で確認済み)
   --   [0]=H,[1]=L で赤 / [2]=H,[3]=L で緑 / 両方でオレンジ
   -- ----------------------------------------------------------
-  function led (r : std_logic; g : std_logic) return std_logic_vector is
+  --   pwm が '0' の間は消す(明るさの調整)
+  function led (r : std_logic; g : std_logic; pwm : std_logic) return std_logic_vector is
   begin
-    return '0' & g & '0' & r;
+    return '0' & (g and pwm) & '0' & (r and pwm);
   end function;
+
+  -- 明るさ:256のうち何カウント点けるか(100%, 25%, 6.25%, 1.6%)
+  type duty_array is array (0 to 3) of integer;
+  constant DUTY : duty_array := (256, 64, 16, 4);
 
   -- ----------------------------------------------------------
   -- 速度設定:半シンボルぶんのクロック数(50MHz / (2 × シンボル/秒))
@@ -163,6 +174,12 @@ architecture rtl of optical_par2 is
   signal mode_next : std_logic := '0';             -- ボタンで選んだモード('1'=カラー)
   signal msg_cur   : integer range 0 to 3 := 0;    -- 送信中のメッセージ
   signal mode_cur  : std_logic := '0';             -- 送信中のモード
+
+  signal bright_sel : integer range 0 to 3 := 0;   -- 明るさ(0=100%)
+  signal pwm_cnt    : unsigned(7 downto 0) := (others => '0');
+  signal pwm_on     : std_logic := '1';
+  signal hold_cnt   : integer range 0 to 255 := 0; -- PB3を押し続けている時間(約5.2ms単位)
+  signal long_done  : std_logic := '0';            -- 今回の押下で長押しの動作をしたか
 
   -- チャタリング除去(約5.2msごとにボタンを読む)
   signal deb_counter : unsigned(17 downto 0) := (others => '0');
@@ -191,10 +208,28 @@ begin
       rate_sel    <= 1;
       msg_next    <= 0;
       mode_next   <= '0';
+      bright_sel  <= 0;
+      hold_cnt    <= 0;
+      long_done   <= '0';
     elsif clk'event and clk = '1' then
       deb_counter <= deb_counter + 1;
       if deb_counter = 0 then
         sw_node <= sw_mode & sw_msg & sw_rate;
+
+        -- PB3の長押し:押している間、約5.2msごとに数える。約1秒(190回)で明るさを切り替える
+        if sw_node(2) = '0' then
+          if hold_cnt < 255 then
+            hold_cnt <= hold_cnt + 1;
+          end if;
+          if hold_cnt = 190 then
+            if bright_sel = 3 then
+              bright_sel <= 0;
+            else
+              bright_sel <= bright_sel + 1;
+            end if;
+            long_done <= '1';
+          end if;
+        end if;
       end if;
 
       sw_prev <= sw_node;
@@ -215,8 +250,12 @@ begin
         end if;
       end if;
 
-      if sw_prev(2) = '1' and sw_node(2) = '0' then      -- PB3:モード
-        mode_next <= not mode_next;
+      if sw_prev(2) = '0' and sw_node(2) = '1' then      -- PB3を離した瞬間
+        if long_done = '0' then                          -- 短く押しただけならモード切り替え
+          mode_next <= not mode_next;
+        end if;
+        long_done <= '0';
+        hold_cnt  <= 0;
       end if;
     end if;
   end process;
@@ -287,18 +326,36 @@ begin
   end process;
 
   -- ----------------------------------------------------------
+  -- 明るさ(PWM):カウンタが DUTY より小さい間だけ点ける
+  -- ----------------------------------------------------------
+  process (clk, resetn)
+  begin
+    if resetn = '0' then
+      pwm_cnt <= (others => '0');
+      pwm_on  <= '1';
+    elsif clk'event and clk = '1' then
+      pwm_cnt <= pwm_cnt + 1;
+      if to_integer(pwm_cnt) < DUTY(bright_sel) then
+        pwm_on <= '1';
+      else
+        pwm_on <= '0';
+      end if;
+    end if;
+  end process;
+
+  -- ----------------------------------------------------------
   -- LED出力
   -- ----------------------------------------------------------
-  led_d1  <= led(clk_bit, clk_bit);       -- クロックはいつもオレンジ
-  led_d2  <= led(sym_r(8), sym_g(8));
-  led_d3  <= led(sym_r(7), sym_g(7));
-  led_d4  <= led(sym_r(6), sym_g(6));
-  led_d5  <= led(sym_r(5), sym_g(5));
-  led_d6  <= led(sym_r(4), sym_g(4));
-  led_d7  <= led(sym_r(3), sym_g(3));
-  led_d8  <= led(sym_r(2), sym_g(2));
-  led_d9  <= led(sym_r(1), sym_g(1));
-  led_d10 <= led(sym_r(0), sym_g(0));
+  led_d1  <= led(clk_bit, clk_bit, pwm_on);       -- クロックはいつもオレンジ
+  led_d2  <= led(sym_r(8), sym_g(8), pwm_on);
+  led_d3  <= led(sym_r(7), sym_g(7), pwm_on);
+  led_d4  <= led(sym_r(6), sym_g(6), pwm_on);
+  led_d5  <= led(sym_r(5), sym_g(5), pwm_on);
+  led_d6  <= led(sym_r(4), sym_g(4), pwm_on);
+  led_d7  <= led(sym_r(3), sym_g(3), pwm_on);
+  led_d8  <= led(sym_r(2), sym_g(2), pwm_on);
+  led_d9  <= led(sym_r(1), sym_g(1), pwm_on);
+  led_d10 <= led(sym_r(0), sym_g(0), pwm_on);
 
   -- 基板の緑LEDは'0'で点灯なので、反転して出す
   led_stat <= not (std_logic_vector(to_unsigned(msg_next, 2)) &
