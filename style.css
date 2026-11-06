@@ -96,3 +96,6 @@ label.inline { font-size: .85rem; color: var(--muted); display: inline-flex; gap
 .vote .ok { color: var(--ok); } .vote .ng { color: var(--ng); }
 .partial { font-family: var(--mono); font-size: .95rem; color: var(--muted); margin: 0 0 6px; word-break: break-all; }
 @media (max-width: 520px) { .modes { margin-left: 0; } }
+#camCtl .label { align-self: center; }
+.expval { font-family: var(--mono); font-size: .8rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+.inline-hint { margin: 0; flex: 1 1 260px; min-width: 0; }

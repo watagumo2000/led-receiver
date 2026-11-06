@@ -98,6 +98,7 @@ function processFrame(src, t) {
       const moved = trackStep(img, pts, trk, r);
       if (moved) pts = moved;
     }
+    if (source === "camera" && fpsTimes.length % 10 === 0) updateClip(img, pts, r, lastStates);
   }
   ring.push(computeSmall(img)); if (ring.length > RING) ring.shift();
   fpsTimes.push(t); if (fpsTimes.length > 31) fpsTimes.shift();

@@ -162,6 +162,9 @@ async function startCamera() {
   vid.removeAttribute("src"); vid.srcObject = stream; await vid.play().catch(() => {});
   $("badge").textContent = "カメラ:LEDを探しています…";
   loopVideo(true);
+  // 露出のつまみ(カメラが動き出してから設定を読む)
+  const camStream = stream;
+  setTimeout(() => { if (stream === camStream) setupExposure(stream.getVideoTracks()[0]); }, 600);
   // LEDの位置が決まるまで、1秒ごとに自動で探す
   camFindTimer = setInterval(() => {
     if (source !== "camera") return;
@@ -181,6 +184,7 @@ function stopAll() {
   fileInfo = null; analyzing = false;
   vid.pause(); vid.onerror = null;
   if (stream) { stream.getTracks().forEach((tr) => tr.stop()); stream = null; }
+  stopExposure();
   $("err").hidden = true; fpsTimes = [];
 }
 function showErr(s) { $("err").textContent = s; $("err").hidden = false; }
