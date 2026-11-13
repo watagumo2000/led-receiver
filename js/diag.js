@@ -130,7 +130,8 @@ function stopLog() {
   $("logBtn").textContent = "ログを記録";
   if (!rows || !rows.length) { $("logInfo").textContent = "記録したコマがありません"; return; }
   const info = [`# 方式=${mode}`, `# 映像=${source}`, `# 日時=${new Date().toISOString()}`,
-    `# LEDの位置=${pts.map((p) => p ? p.x.toFixed(3) + ":" + p.y.toFixed(3) : "-").join(" ")}`];
+    `# LEDの位置=${pts.map((p) => p ? p.x.toFixed(3) + ":" + p.y.toFixed(3) : "-").join(" ")}`,
+    ...(mode === "col" ? [`# 白飛びを除いて色を読む=${$("skipClip").checked ? "あり" : "なし"}`] : [])];
   const csv = "﻿" + info.join("\n") + "\n" + logHeader() + "\n" + rows.join("\n") + "\n";
   const blob = new Blob([csv], { type: "text/csv" });
   const a = document.createElement("a");
@@ -143,4 +144,4 @@ function stopLog() {
 $("logBtn").onclick = () => (logRows ? stopLog() : startLog());
 $("diagOn").onchange = () => { if (!$("diagOn").checked) { $("diagTable").textContent = ""; $("diagSum").textContent = "表示を止めています。"; } };
 
-(window.LOADED = window.LOADED || {})["diag.js"] = "20261106-1200b";   // 版の確認用(index.html の最後で確かめる)
+(window.LOADED = window.LOADED || {})["diag.js"] = "20261113-1200";   // 版の確認用(index.html の最後で確かめる)

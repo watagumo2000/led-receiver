@@ -179,7 +179,12 @@ $("replay").onclick = () => {
 $("speed").onchange = () => { vid.playbackRate = +$("speed").value; };
 $("resetDec").onclick = resetDecoder;
 $("precise").onchange = () => { resetDecoder(); if (fileInfo && !analyzing) analyzeFile(); };
+$("skipClip").onchange = () => { resetDecoder(); if (fileInfo && !analyzing) analyzeFile(); };
+$("viewBright").oninput = () => {
+  $("viewBrightVal").textContent = $("viewBright").value + "%";
+  if (fileInfo && !analyzing) drawView(still);   // 動画の解析が終わって止まっているときも、すぐ反映する
+};
 
 setModeUI(); resetDecoder(); startDemo(); requestAnimationFrame(uiLoop);
 
-(window.LOADED = window.LOADED || {})["app.js"] = "20261106-1200b";   // 版の確認用(index.html の最後で確かめる)
+(window.LOADED = window.LOADED || {})["app.js"] = "20261113-1200";   // 版の確認用(index.html の最後で確かめる)

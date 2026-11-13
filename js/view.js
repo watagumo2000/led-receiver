@@ -86,7 +86,7 @@ function processFrame(src, t) {
     const vals = pts.map((p) => sampleAt(img, p, r));
     lastVals = vals;
     if (mode === "col") {
-      const rg = pts.map((p) => sampleRG(img, p, r));
+      const rg = pts.map((p) => sampleRG(img, p, r, $("skipClip").checked));
       lastRG = rg;
       const res = feedColor(dec, t, vals[0], rg.slice(1).map((x) => x[0]), rg.slice(1).map((x) => x[1]));
       lastColor = res.states;
@@ -122,14 +122,20 @@ function processFrame(src, t) {
   drawView(src);
 }
 // 読み取り範囲の赤(R)と緑(G)の平均(カラーモード用)
-function sampleRG(img, m, r) {
+// skipClip のときは、白飛びした画素(R・G・Bすべて250以上)を除いて平均する。
+// LEDの中心が白く飛んでも、周りににじんだ光には赤か緑かの色が残っているため。
+// 除いた残りが範囲の15%未満(ほとんど全部が飛んでいて色が分からない)なら、除かずに平均する
+function sampleRG(img, m, r, skipClip) {
   const W = img.width, H = img.height, cx = m.x * W, cy = m.y * H, d = img.data;
-  let sr = 0, sg = 0, n = 0;
+  let sr = 0, sg = 0, n = 0, cr = 0, cg = 0, cn = 0;
   for (let y = Math.max(0, Math.floor(cy - r)); y <= Math.min(H - 1, Math.ceil(cy + r)); y++)
     for (let x = Math.max(0, Math.floor(cx - r)); x <= Math.min(W - 1, Math.ceil(cx + r)); x++) {
       if ((x - cx) ** 2 + (y - cy) ** 2 > r * r) continue;
-      const i = (y * W + x) * 4; sr += d[i]; sg += d[i + 1]; n++;
+      const i = (y * W + x) * 4;
+      if (skipClip && d[i] >= 250 && d[i + 1] >= 250 && d[i + 2] >= 250) { cr += d[i]; cg += d[i + 1]; cn++; continue; }
+      sr += d[i]; sg += d[i + 1]; n++;
     }
+  if (n < 0.15 * (n + cn)) { sr += cr; sg += cg; n += cn; }
   return n ? [sr / n, sg / n] : [0, 0];
 }
 function byteLabel(b) { return b >= 32 && b < 127 ? String.fromCharCode(b) : "·"; }
@@ -162,6 +168,9 @@ function drawView(src) {
   if (view.height !== H) view.height = H;
   view.parentElement.style.aspectRatio = W + " / " + H;
   drawSrc(vctx, src, W, H);
+  // 表示だけを暗くする(黒を重ねる)。読み取りは proc の画像を使うので変わらない
+  const k = +$("viewBright").value / 100;
+  if (k < 1) { vctx.fillStyle = `rgba(0,0,0,${1 - k})`; vctx.fillRect(0, 0, W, H); }
   const r = effRadius(W, H);
   vctx.font = "600 13px IBM Plex Mono, monospace";
   pts.forEach((m, i) => {
@@ -228,4 +237,4 @@ function startDemo() {
   $("demoRate").onchange = () => resetDecoder();
 }
 
-(window.LOADED = window.LOADED || {})["view.js"] = "20261106-1200b";   // 版の確認用(index.html の最後で確かめる)
+(window.LOADED = window.LOADED || {})["view.js"] = "20261113-1200";   // 版の確認用(index.html の最後で確かめる)

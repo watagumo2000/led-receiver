@@ -36,7 +36,7 @@ function medianRate(ts) {
   return m > 0 ? 1 / m : null;
 }
 
-(window.LOADED = window.LOADED || {})["channel.js"] = "20261106-1200b";   // 版の確認用(index.html の最後で確かめる)
+(window.LOADED = window.LOADED || {})["channel.js"] = "20261113-1200";   // 版の確認用(index.html の最後で確かめる)
 
 // 大津の方法:値を2つの組に分けたとき、2つの組の平均の差が一番大きくなる(組の間の分散が最大になる)境目
 function otsuThreshold(values) {

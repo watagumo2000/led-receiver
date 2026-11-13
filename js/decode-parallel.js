@@ -212,4 +212,4 @@ function addVote(dec, len, buf, sum) {
   dec.voted = { n: best.w.n, ok: x === pick[best.L], text: String.fromCharCode(...data) };
 }
 
-(window.LOADED = window.LOADED || {})["decode-parallel.js"] = "20261106-1200b";   // 版の確認用(index.html の最後で確かめる)
+(window.LOADED = window.LOADED || {})["decode-parallel.js"] = "20261113-1200";   // 版の確認用(index.html の最後で確かめる)

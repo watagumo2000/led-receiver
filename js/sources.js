@@ -204,6 +204,7 @@ function setModeUI() {
   $("serPick").hidden = ten();
   $("stPerrWrap").hidden = !ten();
   $("preciseWrap").hidden = mode !== "par";
+  $("skipClipWrap").hidden = mode !== "col";
   $("bitsTitle").textContent = mode === "col" ? "受け取ったシンボル(赤と緑の2バイト。*=パリティで訂正)" : ten() ? "受け取ったシンボル(新しい順に右へ)" : "受け取ったビット(新しい順に右へ)";
   const lg = $("legend");
   lg.innerHTML = mode === "col"
@@ -233,4 +234,4 @@ function setMode(m) {
   if (fileInfo && !analyzing) { const f = findLeds(smallAll); if (f) pts = f; drawView(still); }
 }
 
-(window.LOADED = window.LOADED || {})["sources.js"] = "20261106-1200b";   // 版の確認用(index.html の最後で確かめる)
+(window.LOADED = window.LOADED || {})["sources.js"] = "20261113-1200";   // 版の確認用(index.html の最後で確かめる)
